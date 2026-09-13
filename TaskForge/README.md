@@ -11,8 +11,9 @@ TaskForge is a multi-tenant project management platform inspired by tools like J
 ## Current Status
 
 **Phase 00 — Planning & Architecture** ✅ Complete
+**Phase 01 — Backend Fundamentals** ✅ Complete
 
-No application code exists yet. This phase establishes the architecture, conventions, and roadmap that every future phase will build on. See [`docs/`](./docs) for full details.
+The backend is now a real, runnable NestJS application with a health endpoint, a typed/validated configuration system, a global exception filter, and a small example module demonstrating the controller → service → DI pattern. See [`docs/`](./docs) for architecture and [Setup](#setup) below to run it.
 
 ---
 
@@ -68,10 +69,40 @@ See [`docs/folder-structure.md`](./docs/folder-structure.md).
 - [`docs/coding-conventions.md`](./docs/coding-conventions.md) — naming, style, principles
 - [`docs/git-workflow.md`](./docs/git-workflow.md) — branching, commits, phase workflow
 - [`docs/roadmap.md`](./docs/roadmap.md) — full 21-phase roadmap
+- [`docs/phase-01-concepts.md`](./docs/phase-01-concepts.md) — concepts learned in Phase 01 (NestJS, DI, config, validation, testing)
 
 ## Setup
 
-There is no runnable code yet — Phase 01 introduces the first working NestJS backend. Once Phase 01 lands, this section will include exact setup and run instructions.
+### Backend
+
+```bash
+cd backend
+cp .env.example .env
+npm install
+npm run start:dev
+```
+
+The API will be available at `http://localhost:3000`. Try it:
+
+```bash
+curl http://localhost:3000/health
+curl -X POST http://localhost:3000/examples -H "Content-Type: application/json" -d '{"title":"My first task"}'
+curl http://localhost:3000/examples
+```
+
+### Running Tests
+
+```bash
+cd backend
+npm run test        # unit tests
+npm run test:e2e    # end-to-end tests (spins up the full app in-process)
+npm run lint        # ESLint
+npm run build       # TypeScript build via Nest CLI
+```
+
+### Frontend
+
+Not built yet — introduced in Phase 09.
 
 ## License
 
