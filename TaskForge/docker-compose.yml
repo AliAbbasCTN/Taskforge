@@ -1,0 +1,42 @@
+# TaskForge — local development services
+#
+# NOTE: This is an early, deliberately minimal slice of the Docker work that
+# Phase 18 completes. It exists now purely so you can get a PostgreSQL
+# instance running without installing PostgreSQL directly on your machine.
+#
+# It does NOT yet containerise the backend or frontend themselves - those
+# are still run with `npm run start:dev` on your host. Phase 18 adds the
+# application Dockerfiles, a Redis service, and full orchestration.
+#
+# Usage:
+#   docker compose up -d      # start PostgreSQL in the background
+#   docker compose down       # stop it
+#   docker compose down -v    # stop it AND delete all data
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: taskforge-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: taskforge
+      POSTGRES_PASSWORD: taskforge
+      POSTGRES_DB: taskforge
+    ports:
+      # host:container - exposes the database on localhost:5432 so Prisma
+      # running on your machine can reach it.
+      - '5432:5432'
+    volumes:
+      # A named volume persists the data between container restarts.
+      # Without this, every `docker compose down` would wipe the database.
+      - taskforge-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # Lets Docker report the container as "healthy" only once Postgres is
+      # genuinely ready to accept connections, not merely started.
+      test: ['CMD-SHELL', 'pg_isready -U taskforge -d taskforge']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  taskforge-postgres-data:

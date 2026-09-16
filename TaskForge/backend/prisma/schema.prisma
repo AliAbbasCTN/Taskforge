@@ -1,0 +1,32 @@
+// TaskForge — Prisma schema
+//
+// This file is the single source of truth for TaskForge's database structure.
+// Prisma reads it to (a) generate a fully type-safe database client, and
+// (b) generate SQL migration files that evolve the real PostgreSQL schema.
+//
+// Models are introduced gradually, phase by phase — see docs/database-plan.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// A TaskForge user account.
+///
+/// At this phase a User is standalone. Phase 03 adds authentication fields
+/// (password hash, refresh token state) and Phase 04 connects users to
+/// Organizations via a membership join model.
+model User {
+  id    String @id @default(uuid()) @db.Uuid
+  email String @unique @db.VarChar(255)
+  name  String @db.VarChar(100)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}

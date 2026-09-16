@@ -1,32 +1,58 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Response } from 'express';
+import { PrismaService } from '../database/prisma.service';
 
 /**
- * WHAT: A minimal health-check endpoint.
+ * WHAT: A health-check endpoint reporting whether the service and its
+ * dependencies are usable.
  *
- * WHY: Load balancers, container orchestrators (e.g. Docker, Kubernetes),
- * and uptime monitors all need a cheap, dependency-free endpoint to poll to
- * know "is this instance alive and accepting requests?". It's also the
- * simplest possible way to verify the backend is wired together correctly.
+ * WHY it now checks the database: in Phase 01 this endpoint only proved the
+ * Node process was running. That is a weak signal - the process can be alive
+ * while the database is unreachable, in which case every real request would
+ * fail. A health check should reflect whether the service can actually do
+ * its job.
+ *
+ * WHY the status code changes: monitoring tools and container orchestrators
+ * decide "healthy vs unhealthy" from the HTTP status code, not the response
+ * body. Returning 503 Service Unavailable when the database is down is what
+ * makes this endpoint useful to Docker (Phase 18) and CI (Phase 19).
  *
  * WHERE: `GET /health`.
  *
- * HOW: For now this only confirms the process is up and can read config -
- * it does not check the database or Redis, because those don't exist yet.
- * Once Phase 02 (database) and Phase 12 (Redis) land, this will be upgraded
- * to a real dependency health check (likely using `@nestjs/terminus`) that
- * verifies the database connection and Redis connection are healthy too.
+ * HOW: `SELECT 1` is the cheapest possible query that proves a working
+ * round-trip to PostgreSQL. It touches no tables and returns immediately.
  */
 @Controller('health')
 export class HealthController {
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Get()
-  check() {
+  async check(@Res({ passthrough: true }) res: Response) {
+    const databaseStatus = await this.checkDatabase();
+    const isHealthy = databaseStatus === 'up';
+
+    res.status(isHealthy ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE);
+
     return {
-      status: 'ok',
+      status: isHealthy ? 'ok' : 'error',
       environment: this.configService.get<string>('app.nodeEnv'),
+      dependencies: {
+        database: databaseStatus,
+      },
       timestamp: new Date().toISOString(),
     };
+  }
+
+  private async checkDatabase(): Promise<'up' | 'down'> {
+    try {
+      await this.prisma.$queryRaw`SELECT 1`;
+      return 'up';
+    } catch {
+      return 'down';
+    }
   }
 }

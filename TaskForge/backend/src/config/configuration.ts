@@ -19,4 +19,11 @@ export default () => ({
   cors: {
     origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   },
+  database: {
+    // Prisma reads DATABASE_URL directly from the environment, so this entry
+    // is not what configures Prisma. It is exposed here so the rest of the
+    // application (and the env validation below) treat it as a first-class
+    // piece of configuration rather than a hidden implicit dependency.
+    url: process.env.DATABASE_URL,
+  },
 });

@@ -34,6 +34,11 @@ async function bootstrap() {
     credentials: true,
   });
 
+  // Lets NestJS run module shutdown hooks (including closing the Prisma
+  // connection pool) when the process receives SIGTERM/SIGINT, instead of
+  // dropping in-flight work. This matters once we run in containers.
+  app.enableShutdownHooks();
+
   const port = configService.get<number>('app.port') ?? 3000;
   await app.listen(port);
   logger.log(`TaskForge backend listening on http://localhost:${port}`);
