@@ -13,8 +13,9 @@ TaskForge is a multi-tenant project management platform inspired by tools like J
 **Phase 00 — Planning & Architecture** ✅ Complete
 **Phase 01 — Backend Fundamentals** ✅ Complete
 **Phase 02 — Database Architecture** ✅ Complete
+**Phase 03 — Authentication** ✅ Complete
 
-The backend is a runnable NestJS application backed by PostgreSQL via Prisma, with a database-aware health check, a typed/validated configuration system, a global exception filter, and a fully tested `users` module (27 tests). See [`docs/`](./docs) for architecture and [Setup](#setup) below to run it.
+The backend has full authentication: registration, login, JWT access + refresh tokens with rotation, and logout, all backed by PostgreSQL via Prisma. Protected routes require a valid access token, and users can only modify their own account. See [`docs/`](./docs) for architecture and [Setup](#setup) below to run it.
 
 ---
 
@@ -72,6 +73,7 @@ See [`docs/folder-structure.md`](./docs/folder-structure.md).
 - [`docs/roadmap.md`](./docs/roadmap.md) — full 21-phase roadmap
 - [`docs/phase-01-concepts.md`](./docs/phase-01-concepts.md) — concepts learned in Phase 01 (NestJS, DI, config, validation, testing)
 - [`docs/phase-02-concepts.md`](./docs/phase-02-concepts.md) — concepts learned in Phase 02 (PostgreSQL, Prisma, migrations, schema design)
+- [`docs/phase-03-concepts.md`](./docs/phase-03-concepts.md) — concepts learned in Phase 03 (password hashing, JWTs, refresh token rotation, a real bug we hit and fixed)
 
 ## Setup
 
@@ -90,6 +92,11 @@ This starts PostgreSQL 16 on `localhost:5432` with user/password/database all se
 ```bash
 cd backend
 cp .env.example .env
+```
+
+Then open `.env` and replace `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` with two different random values (e.g. `openssl rand -base64 32`, run twice) — the app refuses to start with the placeholder values or with both secrets the same.
+
+```bash
 npm install              # also runs `prisma generate` automatically
 npx prisma migrate dev   # creates the database tables
 npm run start:dev
@@ -99,10 +106,15 @@ The API will be available at `http://localhost:3000`. Try it:
 
 ```bash
 curl http://localhost:3000/health
-curl -X POST http://localhost:3000/users \
+
+# Register an account
+curl -X POST http://localhost:3000/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"email":"ada@example.com","name":"Ada Lovelace"}'
-curl http://localhost:3000/users
+  -d '{"email":"ada@example.com","name":"Ada Lovelace","password":"password1"}'
+
+# Use the accessToken from the response above
+curl http://localhost:3000/auth/me -H "Authorization: Bearer <accessToken>"
+curl http://localhost:3000/users -H "Authorization: Bearer <accessToken>"
 ```
 
 ### Running Tests

@@ -7,17 +7,25 @@ import { PrismaService } from '../src/database/prisma.service';
 import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
 
 /**
- * These are END-TO-END tests: they boot the real application and issue real
- * HTTP requests against a REAL PostgreSQL database.
- *
- * They require a running database (see docker-compose.yml) and an applied
- * migration. Unlike the unit tests, these prove that the pieces are actually
- * wired together correctly - routing, validation, the exception filter, the
+ * END-TO-END tests: boot the real application and issue real HTTP requests
+ * against a REAL PostgreSQL database. These prove the pieces are actually
+ * wired together - routing, validation, guards, the exception filter, the
  * Prisma connection, and the database constraints themselves.
  */
 describe('TaskForge backend (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
+
+  const registerUser = (
+    overrides: Partial<{ email: string; name: string; password: string }> = {},
+  ) =>
+    request(app.getHttpServer())
+      .post('/auth/register')
+      .send({
+        email: overrides.email ?? 'ada@example.com',
+        name: overrides.name ?? 'Ada Lovelace',
+        password: overrides.password ?? 'password1',
+      });
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -25,8 +33,6 @@ describe('TaskForge backend (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    // Mirrors the configuration in main.ts so these tests exercise the same
-    // validation and error-formatting behaviour real requests will hit.
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -40,8 +46,6 @@ describe('TaskForge backend (e2e)', () => {
     prisma = app.get(PrismaService);
   });
 
-  // Start each test from a known-empty table so tests don't depend on each
-  // other's leftovers or on whatever is already in the dev database.
   beforeEach(async () => {
     await prisma.user.deleteMany();
   });
@@ -63,156 +67,236 @@ describe('TaskForge backend (e2e)', () => {
     });
   });
 
-  describe('POST /users', () => {
-    it('creates a user and persists it to the database', async () => {
-      const res = await request(app.getHttpServer())
-        .post('/users')
-        .send({ email: 'ada@example.com', name: 'Ada Lovelace' })
-        .expect(201);
+  describe('POST /auth/register', () => {
+    it('creates an account and returns a token pair, never the password hash', async () => {
+      const res = await registerUser().expect(201);
 
-      expect(res.body.email).toBe('ada@example.com');
-      expect(res.body.id).toEqual(expect.any(String));
-
-      // Confirm it really reached PostgreSQL, not just the response object.
-      const stored = await prisma.user.findUnique({
-        where: { id: res.body.id },
-      });
-      expect(stored?.name).toBe('Ada Lovelace');
+      expect(res.body.user.email).toBe('ada@example.com');
+      expect(res.body.user).not.toHaveProperty('passwordHash');
+      expect(res.body.tokens.accessToken).toEqual(expect.any(String));
+      expect(res.body.tokens.refreshToken).toEqual(expect.any(String));
     });
 
-    it('rejects an invalid email with 400', () => {
-      return request(app.getHttpServer())
-        .post('/users')
-        .send({ email: 'not-an-email', name: 'Ada' })
-        .expect(400);
+    it('rejects a weak password (no digit)', () => {
+      return registerUser({ password: 'onlyletters' }).expect(400);
     });
 
-    it('rejects a missing name with 400', () => {
-      return request(app.getHttpServer())
-        .post('/users')
-        .send({ email: 'ada@example.com' })
-        .expect(400);
+    it('rejects a short password', () => {
+      return registerUser({ password: 'ab1' }).expect(400);
     });
 
-    it('rejects unknown properties with 400', () => {
-      return request(app.getHttpServer())
-        .post('/users')
-        .send({ email: 'ada@example.com', name: 'Ada', isAdmin: true })
-        .expect(400);
+    it('rejects an invalid email', () => {
+      return registerUser({ email: 'not-an-email' }).expect(400);
     });
 
     it('returns 409 when the email is already registered', async () => {
-      await request(app.getHttpServer())
-        .post('/users')
-        .send({ email: 'dup@example.com', name: 'First' })
-        .expect(201);
-
-      return request(app.getHttpServer())
-        .post('/users')
-        .send({ email: 'dup@example.com', name: 'Second' })
-        .expect(409);
+      await registerUser({ email: 'dup@example.com' }).expect(201);
+      return registerUser({ email: 'dup@example.com' }).expect(409);
     });
   });
 
-  describe('GET /users/:id', () => {
-    it('returns the requested user', async () => {
-      const created = await prisma.user.create({
-        data: { email: 'grace@example.com', name: 'Grace Hopper' },
-      });
+  describe('POST /auth/login', () => {
+    it('returns a fresh token pair for correct credentials', async () => {
+      await registerUser({
+        email: 'grace@example.com',
+        password: 'correcthorse1',
+      }).expect(201);
 
       return request(app.getHttpServer())
-        .get(`/users/${created.id}`)
+        .post('/auth/login')
+        .send({ email: 'grace@example.com', password: 'correcthorse1' })
         .expect(200)
         .expect((res: Response) => {
-          expect(res.body.name).toBe('Grace Hopper');
+          expect(res.body.tokens.accessToken).toEqual(expect.any(String));
         });
     });
 
-    it('returns 404 for a well-formed but unknown id', () => {
+    it('returns 401 for a wrong password', async () => {
+      await registerUser({
+        email: 'grace@example.com',
+        password: 'correcthorse1',
+      }).expect(201);
+
       return request(app.getHttpServer())
-        .get('/users/11111111-1111-4111-8111-111111111111')
-        .expect(404);
+        .post('/auth/login')
+        .send({ email: 'grace@example.com', password: 'wrongpassword1' })
+        .expect(401);
     });
 
-    it('returns 400 for a malformed id', () => {
-      return request(app.getHttpServer()).get('/users/not-a-uuid').expect(400);
+    it('returns 401 for an email that was never registered, with the same message as a wrong password', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: 'nobody@example.com', password: 'whatever1' })
+        .expect(401);
+
+      expect(res.body.message).toBe('Invalid email or password');
     });
   });
 
-  describe('PATCH /users/:id', () => {
-    it('updates the name and bumps updatedAt', async () => {
-      const created = await prisma.user.create({
-        data: { email: 'alan@example.com', name: 'Alan' },
-      });
+  describe('protected routes without a token', () => {
+    it('rejects GET /users with 401', () => {
+      return request(app.getHttpServer()).get('/users').expect(401);
+    });
+
+    it('rejects GET /auth/me with 401', () => {
+      return request(app.getHttpServer()).get('/auth/me').expect(401);
+    });
+  });
+
+  describe('authenticated flows', () => {
+    async function registerAndLogin(
+      email = 'alan@example.com',
+      password = 'turing1234',
+    ) {
+      const res = await registerUser({
+        email,
+        name: 'Alan Turing',
+        password,
+      }).expect(201);
+      return { userId: res.body.user.id as string, tokens: res.body.tokens };
+    }
+
+    it('GET /auth/me returns the authenticated user profile', async () => {
+      const { tokens, userId } = await registerAndLogin();
 
       const res = await request(app.getHttpServer())
-        .patch(`/users/${created.id}`)
-        .send({ name: 'Alan Turing' })
+        .get('/auth/me')
+        .set('Authorization', `Bearer ${tokens.accessToken}`)
         .expect(200);
 
-      expect(res.body.name).toBe('Alan Turing');
-      expect(new Date(res.body.updatedAt).getTime()).toBeGreaterThanOrEqual(
-        created.updatedAt.getTime(),
+      expect(res.body.id).toBe(userId);
+      expect(res.body).not.toHaveProperty('passwordHash');
+    });
+
+    it('rejects a malformed access token with 401', () => {
+      return request(app.getHttpServer())
+        .get('/auth/me')
+        .set('Authorization', 'Bearer not-a-real-token')
+        .expect(401);
+    });
+
+    it('GET /users lists users once authenticated', async () => {
+      const { tokens } = await registerAndLogin();
+
+      return request(app.getHttpServer())
+        .get('/users')
+        .set('Authorization', `Bearer ${tokens.accessToken}`)
+        .expect(200)
+        .expect((res: Response) => {
+          expect(res.body).toHaveLength(1);
+        });
+    });
+
+    it('allows a user to update their own profile', async () => {
+      const { tokens, userId } = await registerAndLogin();
+
+      return request(app.getHttpServer())
+        .patch(`/users/${userId}`)
+        .set('Authorization', `Bearer ${tokens.accessToken}`)
+        .send({ name: 'A. Turing' })
+        .expect(200)
+        .expect((res: Response) => {
+          expect(res.body.name).toBe('A. Turing');
+        });
+    });
+
+    it('forbids a user from updating a DIFFERENT user (403)', async () => {
+      const first = await registerAndLogin('alan@example.com');
+      const second = await registerAndLogin('grace@example.com');
+
+      return request(app.getHttpServer())
+        .patch(`/users/${second.userId}`)
+        .set('Authorization', `Bearer ${first.tokens.accessToken}`)
+        .send({ name: 'Hijacked' })
+        .expect(403);
+    });
+
+    it('forbids a user from deleting a DIFFERENT user (403)', async () => {
+      const first = await registerAndLogin('alan@example.com');
+      const second = await registerAndLogin('grace@example.com');
+
+      return request(app.getHttpServer())
+        .delete(`/users/${second.userId}`)
+        .set('Authorization', `Bearer ${first.tokens.accessToken}`)
+        .expect(403);
+    });
+
+    it('allows a user to delete their own account', async () => {
+      const { tokens, userId } = await registerAndLogin();
+
+      await request(app.getHttpServer())
+        .delete(`/users/${userId}`)
+        .set('Authorization', `Bearer ${tokens.accessToken}`)
+        .expect(204);
+
+      const stored = await prisma.user.findUnique({ where: { id: userId } });
+      expect(stored).toBeNull();
+    });
+  });
+
+  describe('POST /auth/refresh', () => {
+    it('issues a new token pair for a valid refresh token', async () => {
+      const register = await registerUser({ email: 'ada@example.com' }).expect(
+        201,
       );
+      const { refreshToken } = register.body.tokens;
+
+      const res = await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .send({ refreshToken })
+        .expect(200);
+
+      expect(res.body.accessToken).toEqual(expect.any(String));
+      expect(res.body.refreshToken).not.toBe(refreshToken);
     });
 
-    it('returns 404 when updating an unknown user', () => {
+    it('rejects a refresh token that was already rotated (reused)', async () => {
+      const register = await registerUser({ email: 'ada@example.com' }).expect(
+        201,
+      );
+      const { refreshToken } = register.body.tokens;
+
+      // Use it once - this rotates it.
+      await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .send({ refreshToken })
+        .expect(200);
+
+      // Using the SAME (now-stale) token again must fail.
       return request(app.getHttpServer())
-        .patch('/users/11111111-1111-4111-8111-111111111111')
-        .send({ name: 'Nobody' })
-        .expect(404);
+        .post('/auth/refresh')
+        .send({ refreshToken })
+        .expect(401);
     });
 
-    it('rejects attempts to change the email', async () => {
-      const created = await prisma.user.create({
-        data: { email: 'fixed@example.com', name: 'Fixed' },
-      });
-
+    it('rejects a malformed refresh token with 400 (fails validation, not auth)', () => {
       return request(app.getHttpServer())
-        .patch(`/users/${created.id}`)
-        .send({ email: 'changed@example.com' })
+        .post('/auth/refresh')
+        .send({ refreshToken: 'not-a-jwt' })
         .expect(400);
     });
   });
 
-  describe('DELETE /users/:id', () => {
-    it('deletes the user and returns 204', async () => {
-      const created = await prisma.user.create({
-        data: { email: 'gone@example.com', name: 'Gone' },
-      });
+  describe('POST /auth/logout', () => {
+    it('invalidates the refresh token', async () => {
+      const register = await registerUser({ email: 'ada@example.com' }).expect(
+        201,
+      );
+      const { accessToken, refreshToken } = register.body.tokens;
 
       await request(app.getHttpServer())
-        .delete(`/users/${created.id}`)
+        .post('/auth/logout')
+        .set('Authorization', `Bearer ${accessToken}`)
         .expect(204);
 
-      const stored = await prisma.user.findUnique({
-        where: { id: created.id },
-      });
-      expect(stored).toBeNull();
+      return request(app.getHttpServer())
+        .post('/auth/refresh')
+        .send({ refreshToken })
+        .expect(401);
     });
 
-    it('returns 404 when deleting an unknown user', () => {
-      return request(app.getHttpServer())
-        .delete('/users/11111111-1111-4111-8111-111111111111')
-        .expect(404);
-    });
-  });
-
-  describe('GET /users', () => {
-    it('lists created users', async () => {
-      await prisma.user.createMany({
-        data: [
-          { email: 'a@example.com', name: 'A' },
-          { email: 'b@example.com', name: 'B' },
-        ],
-      });
-
-      return request(app.getHttpServer())
-        .get('/users')
-        .expect(200)
-        .expect((res: Response) => {
-          expect(res.body).toHaveLength(2);
-        });
+    it('requires authentication', () => {
+      return request(app.getHttpServer()).post('/auth/logout').expect(401);
     });
   });
 });

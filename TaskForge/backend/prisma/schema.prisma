@@ -17,13 +17,22 @@ datasource db {
 
 /// A TaskForge user account.
 ///
-/// At this phase a User is standalone. Phase 03 adds authentication fields
-/// (password hash, refresh token state) and Phase 04 connects users to
+/// Phase 03 adds authentication fields. Phase 04 connects users to
 /// Organizations via a membership join model.
 model User {
   id    String @id @default(uuid()) @db.Uuid
   email String @unique @db.VarChar(255)
   name  String @db.VarChar(100)
+
+  /// A bcrypt hash - never the plaintext password. See docs/phase-03-concepts.md
+  /// for why we hash rather than encrypt, and why bcrypt specifically.
+  passwordHash String @map("password_hash") @db.VarChar(255)
+
+  /// A bcrypt hash of the user's current refresh token, or null if they are
+  /// logged out. We store a HASH of the token, not the token itself - if the
+  /// database were ever leaked, the stored value alone cannot be used to log
+  /// in as the user (same reasoning as passwordHash).
+  hashedRefreshToken String? @map("hashed_refresh_token") @db.VarChar(255)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

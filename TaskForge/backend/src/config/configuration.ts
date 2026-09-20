@@ -26,4 +26,15 @@ export default () => ({
     // piece of configuration rather than a hidden implicit dependency.
     url: process.env.DATABASE_URL,
   },
+  jwt: {
+    // Access tokens are short-lived: if one is ever stolen (e.g. via an XSS
+    // attack in a future frontend), the window an attacker can use it in is
+    // small. Refresh tokens live much longer, but are only ever sent to
+    // `/auth/refresh`, are hashed at rest, and are rotated on every use -
+    // see docs/phase-03-concepts.md for the full reasoning.
+    accessSecret: process.env.JWT_ACCESS_SECRET,
+    accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
+    refreshSecret: process.env.JWT_REFRESH_SECRET,
+    refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
+  },
 });
