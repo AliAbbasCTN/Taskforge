@@ -82,7 +82,7 @@ export class AuthService {
       throw invalidCredentials();
     }
 
-    const user = await this.usersService.findOne(record.id);
+    const user = await this.usersService.findOne(record.id, record.id);
     const tokens = await this.issueTokens(user.id, user.email);
     return { user, tokens };
   }

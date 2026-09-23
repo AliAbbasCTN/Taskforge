@@ -17,8 +17,7 @@ datasource db {
 
 /// A TaskForge user account.
 ///
-/// Phase 03 adds authentication fields. Phase 04 connects users to
-/// Organizations via a membership join model.
+/// Phase 04 connects users to Organizations via the Membership join model.
 model User {
   id    String @id @default(uuid()) @db.Uuid
   email String @unique @db.VarChar(255)
@@ -28,14 +27,81 @@ model User {
   /// for why we hash rather than encrypt, and why bcrypt specifically.
   passwordHash String @map("password_hash") @db.VarChar(255)
 
-  /// A bcrypt hash of the user's current refresh token, or null if they are
+  /// A SHA-256 hash of the user's current refresh token, or null if they are
   /// logged out. We store a HASH of the token, not the token itself - if the
   /// database were ever leaked, the stored value alone cannot be used to log
-  /// in as the user (same reasoning as passwordHash).
+  /// in as the user. See docs/phase-03-concepts.md for why this is SHA-256
+  /// rather than bcrypt (a real bug we hit and fixed during that phase).
   hashedRefreshToken String? @map("hashed_refresh_token") @db.VarChar(255)
+
+  memberships Membership[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("users")
+}
+
+/// A tenant on the TaskForge platform. Everything a team works on -
+/// eventually teams, projects, boards, tasks - belongs to exactly one
+/// Organization. A User can belong to multiple Organizations (via
+/// Membership), but data belonging to one Organization must never be
+/// visible to a user who isn't a member of it. That boundary is enforced in
+/// application code (see OrganizationMembershipGuard), not just by this
+/// schema - the schema only makes the boundary representable.
+model Organization {
+  id   String @id @default(uuid()) @db.Uuid
+  name String @db.VarChar(150)
+
+  /// A URL-safe, human-readable identifier, generated from `name` at
+  /// creation time. Not used for routing yet (routes use `id`) - it exists
+  /// now because retrofitting a unique slug onto an existing table later,
+  /// once organizations already exist with colliding names, is more painful
+  /// than reserving the column now.
+  slug String @unique @db.VarChar(160)
+
+  memberships Membership[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("organizations")
+}
+
+/// Which role a Membership grants within its Organization.
+///
+/// MANAGER exists in the schema now but isn't given any distinct
+/// permissions yet - Phase 06 (RBAC) is where ADMIN/MANAGER/MEMBER actually
+/// diverge in what they're allowed to do. For this phase, every check that
+/// cares about role only distinguishes ADMIN from "everyone else".
+enum MembershipRole {
+  ADMIN
+  MANAGER
+  MEMBER
+}
+
+/// The join model connecting a User to an Organization, with a role. This
+/// is the single source of truth for "who belongs to which organization,
+/// and with what permissions" - every tenant-isolation check in the app
+/// ultimately comes down to "does a Membership row exist for this
+/// user+organization pair".
+model Membership {
+  id             String @id @default(uuid()) @db.Uuid
+  userId         String @map("user_id") @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  role MembershipRole @default(MEMBER)
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// A user can only have ONE membership (one role) per organization -
+  /// prevents duplicate/conflicting rows for the same user+org pair.
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@index([userId])
+  @@map("memberships")
 }

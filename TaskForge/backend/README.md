@@ -1,16 +1,23 @@
 # TaskForge Backend
 
-A NestJS + TypeScript backend backed by PostgreSQL via Prisma, with JWT authentication.
+A NestJS + TypeScript backend backed by PostgreSQL via Prisma, with JWT authentication and multi-tenant organizations.
 
-## What exists (Phase 03)
+## What exists (Phase 04)
 
 - **Auth:** `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`
-- **Users:** `GET /users`, `GET /users/:id`, `PATCH /users/:id`, `DELETE /users/:id` — all require a valid access token; `PATCH`/`DELETE` require you to be modifying your own account
+- **Users:** `GET /users/:id` (self, or anyone sharing an organization with you), `PATCH /users/:id`, `DELETE /users/:id` (self only)
+- **Organizations:**
+  - `POST /organizations` — create one (you become its ADMIN)
+  - `GET /organizations` — list organizations you belong to
+  - `GET /organizations/:id` — details (members only — 404 for non-members)
+  - `PATCH /organizations/:id` — rename (admins only)
+  - `GET /organizations/:id/members` — list members (members only)
+  - `POST /organizations/:id/members` — add an existing user by email (admins only)
+  - `PATCH /organizations/:id/members/:userId` — change a member's role (admins only)
+  - `DELETE /organizations/:id/members/:userId` — remove a member (admins only)
 - `GET /health` — liveness check that also verifies database connectivity
-- Passwords hashed with bcrypt; refresh tokens hashed with SHA-256 and rotated on every use
-- A typed, validated configuration system (`src/config/`) — fails fast at startup if the environment is misconfigured, including JWT secrets
-- A global exception filter producing consistent error responses (`src/common/filters/`)
-- Global request validation (whitelist + reject unknown properties)
+- Tenant isolation is enforced server-side by `OrganizationMembershipGuard` on every organization-scoped route — a non-member gets 404, never 403
+- A "last admin" safety rail prevents an organization from ever ending up with zero admins
 
 ## Run locally
 
@@ -37,22 +44,27 @@ npm run lint
 npm run build
 ```
 
-## Trying the auth flow manually
+## Trying the multi-tenancy flow manually
 
 ```bash
-# Register
-curl -X POST http://localhost:3000/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"ada@example.com","name":"Ada Lovelace","password":"password1"}'
+# Register two accounts
+curl -X POST http://localhost:3000/auth/register -H "Content-Type: application/json" \
+  -d '{"email":"admin@acme.com","name":"Admin","password":"password1"}'
+curl -X POST http://localhost:3000/auth/register -H "Content-Type: application/json" \
+  -d '{"email":"outsider@x.com","name":"Outsider","password":"password1"}'
 
-# Copy the accessToken and refreshToken from the response, then:
-curl http://localhost:3000/auth/me -H "Authorization: Bearer <accessToken>"
+# Using the admin's accessToken, create an organization
+curl -X POST http://localhost:3000/organizations \
+  -H "Authorization: Bearer <adminAccessToken>" -H "Content-Type: application/json" \
+  -d '{"name":"Acme Inc."}'
 
-curl -X POST http://localhost:3000/auth/refresh \
-  -H "Content-Type: application/json" \
-  -d '{"refreshToken":"<refreshToken>"}'
+# The outsider trying to view that org (by id) gets 404, not 403
+curl http://localhost:3000/organizations/<orgId> -H "Authorization: Bearer <outsiderAccessToken>"
 
-curl -X POST http://localhost:3000/auth/logout -H "Authorization: Bearer <accessToken>"
+# Add the outsider as a member (admin-only)
+curl -X POST http://localhost:3000/organizations/<orgId>/members \
+  -H "Authorization: Bearer <adminAccessToken>" -H "Content-Type: application/json" \
+  -d '{"email":"outsider@x.com"}'
 ```
 
 ## Database
@@ -61,10 +73,10 @@ curl -X POST http://localhost:3000/auth/logout -H "Authorization: Bearer <access
 |---|---|
 | `npx prisma migrate dev` | Create and apply a migration after editing `schema.prisma` |
 | `npx prisma migrate deploy` | Apply existing migrations (production/CI) |
-| `npx prisma migrate reset` | Drop and recreate the dev database, reapplying all migrations — needed if you have old rows that predate a NOT NULL column added later |
+| `npx prisma migrate reset` | Drop and recreate the dev database, reapplying all migrations |
 | `npx prisma generate` | Regenerate the typed client |
 | `npx prisma studio` | Visual database browser |
 
 ## Structure
 
-Domain module folders (`organizations/`, `teams/`, `projects/`, `boards/`, `tasks/`, `comments/`, `notifications/`, `files/`, `search/`, `activity/`, `audit/`) are still empty placeholders. See [`../docs/folder-structure.md`](../docs/folder-structure.md) and [`../docs/architecture.md`](../docs/architecture.md).
+Domain module folders (`teams/`, `projects/`, `boards/`, `tasks/`, `comments/`, `notifications/`, `files/`, `search/`, `activity/`, `audit/`) are still empty placeholders. See [`../docs/folder-structure.md`](../docs/folder-structure.md) and [`../docs/architecture.md`](../docs/architecture.md).

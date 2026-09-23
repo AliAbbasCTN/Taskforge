@@ -12,11 +12,14 @@ describe('UsersService', () => {
   let service: UsersService;
   let prisma: {
     user: {
-      findMany: jest.Mock;
       findUnique: jest.Mock;
       create: jest.Mock;
       update: jest.Mock;
       delete: jest.Mock;
+    };
+    membership: {
+      findMany: jest.Mock;
+      findFirst: jest.Mock;
     };
   };
 
@@ -27,6 +30,7 @@ describe('UsersService', () => {
     createdAt: new Date(),
     updatedAt: new Date(),
   };
+  const otherUserId = '22222222-2222-4222-8222-222222222222';
 
   const prismaError = (code: string) =>
     new Prisma.PrismaClientKnownRequestError('mock error', {
@@ -37,11 +41,14 @@ describe('UsersService', () => {
   beforeEach(async () => {
     prisma = {
       user: {
-        findMany: jest.fn(),
         findUnique: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
         delete: jest.fn(),
+      },
+      membership: {
+        findMany: jest.fn(),
+        findFirst: jest.fn(),
       },
     };
 
@@ -52,32 +59,56 @@ describe('UsersService', () => {
     service = module.get<UsersService>(UsersService);
   });
 
-  describe('findAll', () => {
-    it('returns all users, newest first, without sensitive fields', async () => {
-      prisma.user.findMany.mockResolvedValue([safeUser]);
-
-      await expect(service.findAll()).resolves.toEqual([safeUser]);
-      expect(prisma.user.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ orderBy: { createdAt: 'desc' } }),
-      );
-      // Confirm the query never even asks for the sensitive columns.
-      const selectArg = prisma.user.findMany.mock.calls[0][0].select;
-      expect(selectArg.passwordHash).toBeUndefined();
-      expect(selectArg.hashedRefreshToken).toBeUndefined();
-    });
-  });
-
   describe('findOne', () => {
-    it('returns the user when found', async () => {
+    it('returns your own profile without needing a shared organization', async () => {
       prisma.user.findUnique.mockResolvedValue(safeUser);
-      await expect(service.findOne(safeUser.id)).resolves.toEqual(safeUser);
+      await expect(service.findOne(safeUser.id, safeUser.id)).resolves.toEqual(
+        safeUser,
+      );
+      // No membership lookup needed for a self-lookup.
+      expect(prisma.membership.findMany).not.toHaveBeenCalled();
     });
 
     it('throws NotFoundException when the user does not exist', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
-      await expect(service.findOne(safeUser.id)).rejects.toThrow(
+      await expect(service.findOne(safeUser.id, safeUser.id)).rejects.toThrow(
         NotFoundException,
       );
+    });
+
+    it('returns the profile when the requester shares an organization with the target', async () => {
+      prisma.user.findUnique.mockResolvedValue(safeUser);
+      prisma.membership.findMany.mockResolvedValue([
+        { organizationId: 'org-1' },
+      ]);
+      prisma.membership.findFirst.mockResolvedValue({ id: 'membership-1' });
+
+      await expect(service.findOne(safeUser.id, otherUserId)).resolves.toEqual(
+        safeUser,
+      );
+    });
+
+    it('throws NotFoundException (not Forbidden) when no organization is shared', async () => {
+      prisma.user.findUnique.mockResolvedValue(safeUser);
+      prisma.membership.findMany.mockResolvedValue([
+        { organizationId: 'org-1' },
+      ]);
+      prisma.membership.findFirst.mockResolvedValue(null);
+
+      await expect(service.findOne(safeUser.id, otherUserId)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('throws NotFoundException when the requester belongs to no organizations at all', async () => {
+      prisma.user.findUnique.mockResolvedValue(safeUser);
+      prisma.membership.findMany.mockResolvedValue([]);
+
+      await expect(service.findOne(safeUser.id, otherUserId)).rejects.toThrow(
+        NotFoundException,
+      );
+      // Short-circuits before even querying for a shared membership.
+      expect(prisma.membership.findFirst).not.toHaveBeenCalled();
     });
   });
 
@@ -94,9 +125,6 @@ describe('UsersService', () => {
     });
 
     it('never returns passwordHash even if somehow present in the result', async () => {
-      // Defensive: even if the select clause were ever broken, we assert
-      // the returned object here is exactly what create() gave back
-      // (proving the service does no further filtering it could get wrong).
       prisma.user.create.mockResolvedValue(safeUser);
       const result = await service.create(input);
       expect(result).not.toHaveProperty('passwordHash');

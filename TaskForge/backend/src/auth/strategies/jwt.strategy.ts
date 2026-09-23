@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
-import { AuthenticatedUser } from '../../common/filters/decorators/current-user.decorator';
+import { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 
 interface AccessTokenPayload {
   sub: string;

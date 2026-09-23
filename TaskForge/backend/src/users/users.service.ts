@@ -14,7 +14,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
  * these queries. That distinction matters: a field that's never fetched
  * cannot accidentally leak through a bug in some later serialization step.
  */
-const SAFE_USER_SELECT = {
+export const SAFE_USER_SELECT = {
   id: true,
   email: true,
   name: true,
@@ -39,7 +39,8 @@ export interface CreateUserInput {
 /**
  * WHAT: Business logic for user records, backed by PostgreSQL via Prisma.
  *
- * WHERE: Injected into `UsersController` and `AuthService`.
+ * WHERE: Injected into `UsersController`, `AuthController`, `AuthService`,
+ * and `OrganizationsService`.
  *
  * A note on error handling: Prisma throws low-level database errors with
  * codes like `P2002` (unique constraint violated) and `P2025` (record not
@@ -51,14 +52,25 @@ export interface CreateUserInput {
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(): Promise<SafeUser[]> {
-    return this.prisma.user.findMany({
-      select: SAFE_USER_SELECT,
-      orderBy: { createdAt: 'desc' },
-    });
-  }
-
-  async findOne(id: string): Promise<SafeUser> {
+  /**
+   * WHAT: Fetches a user's profile, but ONLY if the requester is allowed to
+   * see it - either it's their own profile, or they share at least one
+   * organization with the target user.
+   *
+   * WHY this changed in Phase 04: before organizations existed, "any
+   * logged-in user can view any other user's basic profile" was a
+   * reasonable, low-risk default. Now that TaskForge is multi-tenant, that
+   * same behaviour would let a member of Organization A look up the profile
+   * of any user in Organization B - a real tenant-isolation leak, not a
+   * hypothetical one. This method is the fix: it enforces "shared
+   * organization or self" as a precondition for every profile read.
+   *
+   * WHY 404, not 403: telling an unauthorized requester "403 Forbidden"
+   * confirms the user ID exists at all. Returning the same 404 as a
+   * genuinely nonexistent ID reveals nothing extra - consistent with how
+   * cross-tenant resource lookups are handled everywhere else in this app.
+   */
+  async findOne(id: string, requestingUserId: string): Promise<SafeUser> {
     const user = await this.prisma.user.findUnique({
       where: { id },
       select: SAFE_USER_SELECT,
@@ -68,13 +80,43 @@ export class UsersService {
       throw new NotFoundException(`User with id ${id} not found`);
     }
 
+    if (id !== requestingUserId) {
+      const shareOrg = await this.shareAnyOrganization(id, requestingUserId);
+      if (!shareOrg) {
+        throw new NotFoundException(`User with id ${id} not found`);
+      }
+    }
+
     return user;
+  }
+
+  private async shareAnyOrganization(
+    userIdA: string,
+    userIdB: string,
+  ): Promise<boolean> {
+    const membershipsA = await this.prisma.membership.findMany({
+      where: { userId: userIdA },
+      select: { organizationId: true },
+    });
+
+    if (membershipsA.length === 0) {
+      return false;
+    }
+
+    const organizationIds = membershipsA.map((m) => m.organizationId);
+
+    const sharedMembership = await this.prisma.membership.findFirst({
+      where: { userId: userIdB, organizationId: { in: organizationIds } },
+      select: { id: true },
+    });
+
+    return sharedMembership !== null;
   }
 
   /**
    * Used ONLY by AuthService during login, where the password hash is
    * genuinely needed to verify credentials. Every other caller must use
-   * `findOne`/`findAll`, which never fetch this field.
+   * `findOne`, which never fetches this field.
    */
   async findByEmailForAuth(email: string): Promise<{
     id: string;
@@ -85,6 +127,18 @@ export class UsersService {
     return this.prisma.user.findUnique({
       where: { email },
       select: { id: true, email: true, name: true, passwordHash: true },
+    });
+  }
+
+  /**
+   * Used by OrganizationsService when inviting a member by email - it needs
+   * to look up an existing account by email, but only ever the safe,
+   * public fields (never the password hash).
+   */
+  async findByEmailSafe(email: string): Promise<SafeUser | null> {
+    return this.prisma.user.findUnique({
+      where: { email },
+      select: SAFE_USER_SELECT,
     });
   }
 

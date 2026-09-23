@@ -47,11 +47,15 @@ describe('TaskForge backend (e2e)', () => {
   });
 
   beforeEach(async () => {
+    await prisma.membership.deleteMany();
     await prisma.user.deleteMany();
+    await prisma.organization.deleteMany();
   });
 
   afterAll(async () => {
+    await prisma.membership.deleteMany();
     await prisma.user.deleteMany();
+    await prisma.organization.deleteMany();
     await app.close();
   });
 
@@ -134,8 +138,11 @@ describe('TaskForge backend (e2e)', () => {
   });
 
   describe('protected routes without a token', () => {
-    it('rejects GET /users with 401', () => {
-      return request(app.getHttpServer()).get('/users').expect(401);
+    it('rejects GET /users/:id with 401', async () => {
+      // Register just to get a well-formed UUID to request - the 401 from
+      // the guard should fire before the controller even looks at the id.
+      const someId = '11111111-1111-4111-8111-111111111111';
+      return request(app.getHttpServer()).get(`/users/${someId}`).expect(401);
     });
 
     it('rejects GET /auth/me with 401', () => {
@@ -175,15 +182,28 @@ describe('TaskForge backend (e2e)', () => {
         .expect(401);
     });
 
-    it('GET /users lists users once authenticated', async () => {
+    it('GET /users (platform-wide list) no longer exists (404) - see Phase 04 note', async () => {
+      // This route was intentionally removed in Phase 04: once
+      // organizations exist, "list every user on the platform" is a
+      // tenant-isolation leak, not a convenience. See
+      // docs/phase-04-concepts.md and users.controller.ts.
       const { tokens } = await registerAndLogin();
 
       return request(app.getHttpServer())
         .get('/users')
         .set('Authorization', `Bearer ${tokens.accessToken}`)
+        .expect(404);
+    });
+
+    it('GET /users/:id returns your own profile', async () => {
+      const { tokens, userId } = await registerAndLogin();
+
+      return request(app.getHttpServer())
+        .get(`/users/${userId}`)
+        .set('Authorization', `Bearer ${tokens.accessToken}`)
         .expect(200)
         .expect((res: Response) => {
-          expect(res.body).toHaveLength(1);
+          expect(res.body.id).toBe(userId);
         });
     });
 
@@ -297,6 +317,356 @@ describe('TaskForge backend (e2e)', () => {
 
     it('requires authentication', () => {
       return request(app.getHttpServer()).post('/auth/logout').expect(401);
+    });
+  });
+
+  describe('Organizations', () => {
+    async function registerAndLogin(email: string, name = 'User') {
+      const res = await registerUser({
+        email,
+        name,
+        password: 'password1',
+      }).expect(201);
+      return {
+        userId: res.body.user.id as string,
+        accessToken: res.body.tokens.accessToken as string,
+      };
+    }
+
+    const authed = (token: string) => `Bearer ${token}`;
+
+    it('rejects creating an organization without a token', () => {
+      return request(app.getHttpServer())
+        .post('/organizations')
+        .send({ name: 'Acme' })
+        .expect(401);
+    });
+
+    it('creates an organization and makes the creator its ADMIN', async () => {
+      const { accessToken } = await registerAndLogin('founder@example.com');
+
+      const res = await request(app.getHttpServer())
+        .post('/organizations')
+        .set('Authorization', authed(accessToken))
+        .send({ name: 'Acme Inc.' })
+        .expect(201);
+
+      expect(res.body.name).toBe('Acme Inc.');
+      expect(res.body.slug).toBe('acme-inc');
+      expect(res.body.role).toBe('ADMIN');
+    });
+
+    it('generates distinct slugs for organizations with the same name', async () => {
+      const { accessToken: t1 } = await registerAndLogin('one@example.com');
+      const { accessToken: t2 } = await registerAndLogin('two@example.com');
+
+      const first = await request(app.getHttpServer())
+        .post('/organizations')
+        .set('Authorization', authed(t1))
+        .send({ name: 'Acme' })
+        .expect(201);
+
+      const second = await request(app.getHttpServer())
+        .post('/organizations')
+        .set('Authorization', authed(t2))
+        .send({ name: 'Acme' })
+        .expect(201);
+
+      expect(first.body.slug).toBe('acme');
+      expect(second.body.slug).not.toBe('acme');
+      expect(second.body.slug.startsWith('acme-')).toBe(true);
+    });
+
+    it('GET /organizations lists only organizations you belong to', async () => {
+      const { accessToken: t1 } = await registerAndLogin('one@example.com');
+      const { accessToken: t2 } = await registerAndLogin('two@example.com');
+
+      await request(app.getHttpServer())
+        .post('/organizations')
+        .set('Authorization', authed(t1))
+        .send({ name: 'Org One' })
+        .expect(201);
+      await request(app.getHttpServer())
+        .post('/organizations')
+        .set('Authorization', authed(t2))
+        .send({ name: 'Org Two' })
+        .expect(201);
+
+      const res = await request(app.getHttpServer())
+        .get('/organizations')
+        .set('Authorization', authed(t1))
+        .expect(200);
+
+      expect(res.body).toHaveLength(1);
+      expect(res.body[0].name).toBe('Org One');
+    });
+
+    it('THE CORE TENANT-ISOLATION TEST: a non-member gets 404, not 403, on GET /organizations/:id', async () => {
+      const { accessToken: ownerToken } =
+        await registerAndLogin('owner@example.com');
+      const { accessToken: outsiderToken } = await registerAndLogin(
+        'outsider@example.com',
+      );
+
+      const org = await request(app.getHttpServer())
+        .post('/organizations')
+        .set('Authorization', authed(ownerToken))
+        .send({ name: 'Private Org' })
+        .expect(201);
+
+      // The owner can see it.
+      await request(app.getHttpServer())
+        .get(`/organizations/${org.body.id}`)
+        .set('Authorization', authed(ownerToken))
+        .expect(200);
+
+      // An outsider gets exactly the same response as a nonexistent ID -
+      // 404, never 403 - so the lookup doesn't confirm the org even exists.
+      await request(app.getHttpServer())
+        .get(`/organizations/${org.body.id}`)
+        .set('Authorization', authed(outsiderToken))
+        .expect(404);
+    });
+
+    it('rejects GET /organizations/:id without a token', async () => {
+      const { accessToken } = await registerAndLogin('owner@example.com');
+      const org = await request(app.getHttpServer())
+        .post('/organizations')
+        .set('Authorization', authed(accessToken))
+        .send({ name: 'Org' })
+        .expect(201);
+
+      return request(app.getHttpServer())
+        .get(`/organizations/${org.body.id}`)
+        .expect(401);
+    });
+
+    it('a non-admin member cannot rename the organization (403)', async () => {
+      const { accessToken: adminToken } =
+        await registerAndLogin('admin@example.com');
+      const { accessToken: memberToken, userId: memberUserId } =
+        await registerAndLogin('member@example.com');
+
+      const org = await request(app.getHttpServer())
+        .post('/organizations')
+        .set('Authorization', authed(adminToken))
+        .send({ name: 'Org' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post(`/organizations/${org.body.id}/members`)
+        .set('Authorization', authed(adminToken))
+        .send({ email: 'member@example.com' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .patch(`/organizations/${org.body.id}`)
+        .set('Authorization', authed(memberToken))
+        .send({ name: 'Hijacked Name' })
+        .expect(403);
+
+      // Sanity: the member really was added and really is a member (can
+      // read, just can't rename) - confirms 403 was an authorization
+      // decision, not an accidental membership failure.
+      const membersRes = await request(app.getHttpServer())
+        .get(`/organizations/${org.body.id}/members`)
+        .set('Authorization', authed(memberToken))
+        .expect(200);
+      expect(
+        membersRes.body.some(
+          (m: { user: { id: string } }) => m.user.id === memberUserId,
+        ),
+      ).toBe(true);
+    });
+
+    it('an admin can rename the organization', async () => {
+      const { accessToken } = await registerAndLogin('admin@example.com');
+      const org = await request(app.getHttpServer())
+        .post('/organizations')
+        .set('Authorization', authed(accessToken))
+        .send({ name: 'Old Name' })
+        .expect(201);
+
+      const res = await request(app.getHttpServer())
+        .patch(`/organizations/${org.body.id}`)
+        .set('Authorization', authed(accessToken))
+        .send({ name: 'New Name' })
+        .expect(200);
+
+      expect(res.body.name).toBe('New Name');
+    });
+
+    it('adding a member who has no TaskForge account returns 404', async () => {
+      const { accessToken } = await registerAndLogin('admin@example.com');
+      const org = await request(app.getHttpServer())
+        .post('/organizations')
+        .set('Authorization', authed(accessToken))
+        .send({ name: 'Org' })
+        .expect(201);
+
+      return request(app.getHttpServer())
+        .post(`/organizations/${org.body.id}/members`)
+        .set('Authorization', authed(accessToken))
+        .send({ email: 'nobody-registered@example.com' })
+        .expect(404);
+    });
+
+    it('adding the same member twice returns 409', async () => {
+      const { accessToken } = await registerAndLogin('admin@example.com');
+      await registerAndLogin('member@example.com');
+      const org = await request(app.getHttpServer())
+        .post('/organizations')
+        .set('Authorization', authed(accessToken))
+        .send({ name: 'Org' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post(`/organizations/${org.body.id}/members`)
+        .set('Authorization', authed(accessToken))
+        .send({ email: 'member@example.com' })
+        .expect(201);
+
+      return request(app.getHttpServer())
+        .post(`/organizations/${org.body.id}/members`)
+        .set('Authorization', authed(accessToken))
+        .send({ email: 'member@example.com' })
+        .expect(409);
+    });
+
+    it('a non-admin cannot add members (403)', async () => {
+      const { accessToken: adminToken } =
+        await registerAndLogin('admin@example.com');
+      const { accessToken: memberToken } =
+        await registerAndLogin('member@example.com');
+      await registerAndLogin('target@example.com');
+
+      const org = await request(app.getHttpServer())
+        .post('/organizations')
+        .set('Authorization', authed(adminToken))
+        .send({ name: 'Org' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post(`/organizations/${org.body.id}/members`)
+        .set('Authorization', authed(adminToken))
+        .send({ email: 'member@example.com' })
+        .expect(201);
+
+      return request(app.getHttpServer())
+        .post(`/organizations/${org.body.id}/members`)
+        .set('Authorization', authed(memberToken))
+        .send({ email: 'target@example.com' })
+        .expect(403);
+    });
+
+    it('THE LAST-ADMIN SAFETY RAIL: refuses to remove the only admin, even by themselves', async () => {
+      const { accessToken, userId } = await registerAndLogin(
+        'sole-admin@example.com',
+      );
+      const org = await request(app.getHttpServer())
+        .post('/organizations')
+        .set('Authorization', authed(accessToken))
+        .send({ name: 'Org' })
+        .expect(201);
+
+      return request(app.getHttpServer())
+        .delete(`/organizations/${org.body.id}/members/${userId}`)
+        .set('Authorization', authed(accessToken))
+        .expect(409);
+    });
+
+    it('allows removing an admin when a second admin exists', async () => {
+      const { accessToken: adminToken } =
+        await registerAndLogin('admin@example.com');
+      const { accessToken: secondToken, userId: secondUserId } =
+        await registerAndLogin('second@example.com');
+
+      const org = await request(app.getHttpServer())
+        .post('/organizations')
+        .set('Authorization', authed(adminToken))
+        .send({ name: 'Org' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post(`/organizations/${org.body.id}/members`)
+        .set('Authorization', authed(adminToken))
+        .send({ email: 'second@example.com', role: 'ADMIN' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .delete(`/organizations/${org.body.id}/members/${secondUserId}`)
+        .set('Authorization', authed(adminToken))
+        .expect(204);
+
+      // The removed admin has lost access entirely - confirms removal was real.
+      return request(app.getHttpServer())
+        .get(`/organizations/${org.body.id}`)
+        .set('Authorization', authed(secondToken))
+        .expect(404);
+    });
+
+    it('refuses to demote the only remaining admin via role update', async () => {
+      const { accessToken, userId } = await registerAndLogin(
+        'sole-admin@example.com',
+      );
+      const org = await request(app.getHttpServer())
+        .post('/organizations')
+        .set('Authorization', authed(accessToken))
+        .send({ name: 'Org' })
+        .expect(201);
+
+      return request(app.getHttpServer())
+        .patch(`/organizations/${org.body.id}/members/${userId}`)
+        .set('Authorization', authed(accessToken))
+        .send({ role: 'MEMBER' })
+        .expect(409);
+    });
+
+    it('Phase 03 regression: a member of Org A cannot look up a user who is ONLY in Org B', async () => {
+      const { accessToken: aToken } = await registerAndLogin(
+        'a-admin@example.com',
+      );
+      const { userId: bUserId } = await registerAndLogin('b-admin@example.com');
+
+      await request(app.getHttpServer())
+        .post('/organizations')
+        .set('Authorization', authed(aToken))
+        .send({ name: 'Org A' })
+        .expect(201);
+
+      // No shared organization between the two users.
+      return request(app.getHttpServer())
+        .get(`/users/${bUserId}`)
+        .set('Authorization', authed(aToken))
+        .expect(404);
+    });
+
+    it('Phase 03 fix confirmed: users who share an organization CAN look each other up', async () => {
+      const { accessToken: adminToken, userId: adminUserId } =
+        await registerAndLogin('admin2@example.com');
+      const { userId: memberUserId } = await registerAndLogin(
+        'member2@example.com',
+      );
+
+      const org = await request(app.getHttpServer())
+        .post('/organizations')
+        .set('Authorization', authed(adminToken))
+        .send({ name: 'Shared Org' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post(`/organizations/${org.body.id}/members`)
+        .set('Authorization', authed(adminToken))
+        .send({ email: 'member2@example.com' })
+        .expect(201);
+
+      const res = await request(app.getHttpServer())
+        .get(`/users/${memberUserId}`)
+        .set('Authorization', authed(adminToken))
+        .expect(200);
+
+      expect(res.body.id).toBe(memberUserId);
+      expect(adminUserId).not.toBe(memberUserId);
     });
   });
 });

@@ -15,7 +15,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import {
   CurrentUser,
   AuthenticatedUser,
-} from '../common/filters/decorators/current-user.decorator';
+} from '../common/decorators/current-user.decorator';
 import { UsersService } from '../users/users.service';
 
 /**
@@ -65,7 +65,8 @@ export class AuthController {
     // JwtStrategy only decodes the token payload (id + email) - it doesn't
     // hit the database on every request (see jwt.strategy.ts for why). This
     // route is where a client actually gets the user's current, fresh
-    // profile when it needs it, with one explicit database read.
-    return this.usersService.findOne(user.id);
+    // profile when it needs it, with one explicit database read. Looking up
+    // your own id always succeeds regardless of shared organizations.
+    return this.usersService.findOne(user.id, user.id);
   }
 }
