@@ -14,8 +14,10 @@ TaskForge is a multi-tenant project management platform inspired by tools like J
 **Phase 01 — Backend Fundamentals** ✅ Complete
 **Phase 02 — Database Architecture** ✅ Complete
 **Phase 03 — Authentication** ✅ Complete
+**Phase 04 — Multi-Tenancy** ✅ Complete
+**Phase 05 — Teams** ✅ Complete
 
-The backend has full authentication: registration, login, JWT access + refresh tokens with rotation, and logout, all backed by PostgreSQL via Prisma. Protected routes require a valid access token, and users can only modify their own account. See [`docs/`](./docs) for architecture and [Setup](#setup) below to run it.
+TaskForge now supports Teams within an Organization - a subdivision of an org's people, each with its own LEAD. Nested resource ownership is verified independently at every level (an IDOR-style bug - a team ID from one org being used under a different org's URL - is explicitly caught and tested against). See [`docs/`](./docs) for architecture and [Setup](#setup) below to run it.
 
 ---
 
@@ -74,6 +76,8 @@ See [`docs/folder-structure.md`](./docs/folder-structure.md).
 - [`docs/phase-01-concepts.md`](./docs/phase-01-concepts.md) — concepts learned in Phase 01 (NestJS, DI, config, validation, testing)
 - [`docs/phase-02-concepts.md`](./docs/phase-02-concepts.md) — concepts learned in Phase 02 (PostgreSQL, Prisma, migrations, schema design)
 - [`docs/phase-03-concepts.md`](./docs/phase-03-concepts.md) — concepts learned in Phase 03 (password hashing, JWTs, refresh token rotation, a real bug we hit and fixed)
+- [`docs/phase-04-concepts.md`](./docs/phase-04-concepts.md) — concepts learned in Phase 04 (multi-tenancy, tenant isolation guards, a real Phase 03 leak we found and fixed)
+- [`docs/phase-05-concepts.md`](./docs/phase-05-concepts.md) — concepts learned in Phase 05 (nested resource ownership, IDOR, guard chains)
 
 ## Setup
 
@@ -114,7 +118,12 @@ curl -X POST http://localhost:3000/auth/register \
 
 # Use the accessToken from the response above
 curl http://localhost:3000/auth/me -H "Authorization: Bearer <accessToken>"
-curl http://localhost:3000/users -H "Authorization: Bearer <accessToken>"
+
+# Create an organization - you become its admin
+curl -X POST http://localhost:3000/organizations \
+  -H "Authorization: Bearer <accessToken>" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Acme Inc."}'
 ```
 
 ### Running Tests

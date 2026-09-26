@@ -17,7 +17,7 @@ This document describes the **planned** database evolution, phase by phase. Noth
 |---|---|
 | 02 | `User` |
 | 03 | `passwordHash`, `hashedRefreshToken` fields added to `User` |
-| 04 | `Organization`, `OrganizationMembership` |
+| 04 | `Organization`, `Membership` (with `MembershipRole` enum) |
 | 05 | `Team`, `TeamMembership` |
 | 06 | (role/permission fields on membership models — no new tables initially) |
 | 07 | `Project`, `ProjectMembership` |
