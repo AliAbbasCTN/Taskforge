@@ -47,13 +47,17 @@ describe('TaskForge backend (e2e)', () => {
   });
 
   beforeEach(async () => {
+    await prisma.teamMembership.deleteMany();
     await prisma.membership.deleteMany();
+    await prisma.team.deleteMany();
     await prisma.user.deleteMany();
     await prisma.organization.deleteMany();
   });
 
   afterAll(async () => {
+    await prisma.teamMembership.deleteMany();
     await prisma.membership.deleteMany();
+    await prisma.team.deleteMany();
     await prisma.user.deleteMany();
     await prisma.organization.deleteMany();
     await app.close();
@@ -667,6 +671,386 @@ describe('TaskForge backend (e2e)', () => {
 
       expect(res.body.id).toBe(memberUserId);
       expect(adminUserId).not.toBe(memberUserId);
+    });
+  });
+
+  describe('Teams', () => {
+    const authed = (token: string) => `Bearer ${token}`;
+
+    async function registerAndLogin(email: string, name = 'User') {
+      const res = await registerUser({
+        email,
+        name,
+        password: 'password1',
+      }).expect(201);
+      return {
+        userId: res.body.user.id as string,
+        accessToken: res.body.tokens.accessToken as string,
+      };
+    }
+
+    async function createOrg(token: string, name = 'Org') {
+      const res = await request(app.getHttpServer())
+        .post('/organizations')
+        .set('Authorization', authed(token))
+        .send({ name })
+        .expect(201);
+      return res.body.id as string;
+    }
+
+    it('rejects creating a team without a token', async () => {
+      const { accessToken } = await registerAndLogin('owner@example.com');
+      const orgId = await createOrg(accessToken);
+
+      return request(app.getHttpServer())
+        .post(`/organizations/${orgId}/teams`)
+        .send({ name: 'Eng' })
+        .expect(401);
+    });
+
+    it('an outsider (non-org-member) cannot even reach the teams route (404)', async () => {
+      const { accessToken: ownerToken } =
+        await registerAndLogin('owner@example.com');
+      const { accessToken: outsiderToken } = await registerAndLogin(
+        'outsider@example.com',
+      );
+      const orgId = await createOrg(ownerToken);
+
+      return request(app.getHttpServer())
+        .get(`/organizations/${orgId}/teams`)
+        .set('Authorization', authed(outsiderToken))
+        .expect(404);
+    });
+
+    it('creates a team and makes the creator its LEAD', async () => {
+      const { accessToken } = await registerAndLogin('owner@example.com');
+      const orgId = await createOrg(accessToken);
+
+      const res = await request(app.getHttpServer())
+        .post(`/organizations/${orgId}/teams`)
+        .set('Authorization', authed(accessToken))
+        .send({ name: 'Engineering' })
+        .expect(201);
+
+      expect(res.body.name).toBe('Engineering');
+
+      const members = await request(app.getHttpServer())
+        .get(`/organizations/${orgId}/teams/${res.body.id}/members`)
+        .set('Authorization', authed(accessToken))
+        .expect(200);
+
+      expect(members.body).toHaveLength(1);
+      expect(members.body[0].role).toBe('LEAD');
+    });
+
+    it('ANY org member can see a team they are not personally on', async () => {
+      const { accessToken: ownerToken } =
+        await registerAndLogin('owner@example.com');
+      const { accessToken: memberToken, userId: memberUserId } =
+        await registerAndLogin('member@example.com');
+      const orgId = await createOrg(ownerToken);
+
+      await request(app.getHttpServer())
+        .post(`/organizations/${orgId}/members`)
+        .set('Authorization', authed(ownerToken))
+        .send({ email: 'member@example.com' })
+        .expect(201);
+
+      const team = await request(app.getHttpServer())
+        .post(`/organizations/${orgId}/teams`)
+        .set('Authorization', authed(ownerToken))
+        .send({ name: 'Engineering' })
+        .expect(201);
+
+      // memberUserId is an org member but was never added to this team.
+      const res = await request(app.getHttpServer())
+        .get(`/organizations/${orgId}/teams/${team.body.id}`)
+        .set('Authorization', authed(memberToken))
+        .expect(200);
+
+      expect(res.body.id).toBe(team.body.id);
+      expect(memberUserId).toBeDefined();
+    });
+
+    it('IDOR CHECK: a team ID from a DIFFERENT organization returns 404, even for an org member', async () => {
+      const { accessToken: ownerAToken } = await registerAndLogin(
+        'owner-a@example.com',
+      );
+      const { accessToken: ownerBToken } = await registerAndLogin(
+        'owner-b@example.com',
+      );
+      const orgA = await createOrg(ownerAToken, 'Org A');
+      const orgB = await createOrg(ownerBToken, 'Org B');
+
+      const teamInB = await request(app.getHttpServer())
+        .post(`/organizations/${orgB}/teams`)
+        .set('Authorization', authed(ownerBToken))
+        .send({ name: 'Team In B' })
+        .expect(201);
+
+      // ownerA IS a member of orgA (passes OrganizationMembershipGuard) but
+      // tries to access a team that actually belongs to orgB.
+      return request(app.getHttpServer())
+        .get(`/organizations/${orgA}/teams/${teamInB.body.id}`)
+        .set('Authorization', authed(ownerAToken))
+        .expect(404);
+    });
+
+    it('a non-lead team member cannot rename the team (403)', async () => {
+      const { accessToken: leadToken } =
+        await registerAndLogin('lead@example.com');
+      const { accessToken: memberToken } =
+        await registerAndLogin('member@example.com');
+      const orgId = await createOrg(leadToken);
+
+      await request(app.getHttpServer())
+        .post(`/organizations/${orgId}/members`)
+        .set('Authorization', authed(leadToken))
+        .send({ email: 'member@example.com' })
+        .expect(201);
+
+      const team = await request(app.getHttpServer())
+        .post(`/organizations/${orgId}/teams`)
+        .set('Authorization', authed(leadToken))
+        .send({ name: 'Engineering' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post(`/organizations/${orgId}/teams/${team.body.id}/members`)
+        .set('Authorization', authed(leadToken))
+        .send({ email: 'member@example.com' })
+        .expect(201);
+
+      return request(app.getHttpServer())
+        .patch(`/organizations/${orgId}/teams/${team.body.id}`)
+        .set('Authorization', authed(memberToken))
+        .send({ name: 'Hijacked' })
+        .expect(403);
+    });
+
+    it('someone NOT on the team at all cannot rename it either (403, not just non-leads)', async () => {
+      const { accessToken: leadToken } =
+        await registerAndLogin('lead@example.com');
+      const { accessToken: outsiderInOrgToken } = await registerAndLogin(
+        'org-outsider@example.com',
+      );
+      const orgId = await createOrg(leadToken);
+
+      await request(app.getHttpServer())
+        .post(`/organizations/${orgId}/members`)
+        .set('Authorization', authed(leadToken))
+        .send({ email: 'org-outsider@example.com' })
+        .expect(201);
+
+      const team = await request(app.getHttpServer())
+        .post(`/organizations/${orgId}/teams`)
+        .set('Authorization', authed(leadToken))
+        .send({ name: 'Engineering' })
+        .expect(201);
+
+      // org-outsider is a full org member but was never added to this team.
+      return request(app.getHttpServer())
+        .patch(`/organizations/${orgId}/teams/${team.body.id}`)
+        .set('Authorization', authed(outsiderInOrgToken))
+        .send({ name: 'Hijacked' })
+        .expect(403);
+    });
+
+    it('adding someone who is not an org member returns 422', async () => {
+      const { accessToken: leadToken } =
+        await registerAndLogin('lead@example.com');
+      await registerAndLogin('not-in-org@example.com'); // has an account, but never joined this org
+      const orgId = await createOrg(leadToken);
+
+      const team = await request(app.getHttpServer())
+        .post(`/organizations/${orgId}/teams`)
+        .set('Authorization', authed(leadToken))
+        .send({ name: 'Engineering' })
+        .expect(201);
+
+      return request(app.getHttpServer())
+        .post(`/organizations/${orgId}/teams/${team.body.id}/members`)
+        .set('Authorization', authed(leadToken))
+        .send({ email: 'not-in-org@example.com' })
+        .expect(422);
+    });
+
+    it('adding an org member to the team succeeds', async () => {
+      const { accessToken: leadToken } =
+        await registerAndLogin('lead@example.com');
+      const { userId: memberUserId } =
+        await registerAndLogin('member@example.com');
+      const orgId = await createOrg(leadToken);
+
+      await request(app.getHttpServer())
+        .post(`/organizations/${orgId}/members`)
+        .set('Authorization', authed(leadToken))
+        .send({ email: 'member@example.com' })
+        .expect(201);
+
+      const team = await request(app.getHttpServer())
+        .post(`/organizations/${orgId}/teams`)
+        .set('Authorization', authed(leadToken))
+        .send({ name: 'Engineering' })
+        .expect(201);
+
+      const res = await request(app.getHttpServer())
+        .post(`/organizations/${orgId}/teams/${team.body.id}/members`)
+        .set('Authorization', authed(leadToken))
+        .send({ email: 'member@example.com' })
+        .expect(201);
+
+      expect(res.body.user.id).toBe(memberUserId);
+      expect(res.body.role).toBe('MEMBER');
+    });
+
+    it('adding the same team member twice returns 409', async () => {
+      const { accessToken: leadToken } =
+        await registerAndLogin('lead@example.com');
+      await registerAndLogin('member@example.com');
+      const orgId = await createOrg(leadToken);
+
+      await request(app.getHttpServer())
+        .post(`/organizations/${orgId}/members`)
+        .set('Authorization', authed(leadToken))
+        .send({ email: 'member@example.com' })
+        .expect(201);
+
+      const team = await request(app.getHttpServer())
+        .post(`/organizations/${orgId}/teams`)
+        .set('Authorization', authed(leadToken))
+        .send({ name: 'Engineering' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post(`/organizations/${orgId}/teams/${team.body.id}/members`)
+        .set('Authorization', authed(leadToken))
+        .send({ email: 'member@example.com' })
+        .expect(201);
+
+      return request(app.getHttpServer())
+        .post(`/organizations/${orgId}/teams/${team.body.id}/members`)
+        .set('Authorization', authed(leadToken))
+        .send({ email: 'member@example.com' })
+        .expect(409);
+    });
+
+    it('THE LAST-LEAD SAFETY RAIL: refuses to remove the only lead, even by themselves', async () => {
+      const { accessToken: leadToken, userId: leadUserId } =
+        await registerAndLogin('lead@example.com');
+      const orgId = await createOrg(leadToken);
+
+      const team = await request(app.getHttpServer())
+        .post(`/organizations/${orgId}/teams`)
+        .set('Authorization', authed(leadToken))
+        .send({ name: 'Engineering' })
+        .expect(201);
+
+      return request(app.getHttpServer())
+        .delete(
+          `/organizations/${orgId}/teams/${team.body.id}/members/${leadUserId}`,
+        )
+        .set('Authorization', authed(leadToken))
+        .expect(409);
+    });
+
+    it('allows removing a lead when a second lead exists', async () => {
+      const { accessToken: leadToken } =
+        await registerAndLogin('lead@example.com');
+      const { userId: secondUserId } =
+        await registerAndLogin('second@example.com');
+      const orgId = await createOrg(leadToken);
+
+      await request(app.getHttpServer())
+        .post(`/organizations/${orgId}/members`)
+        .set('Authorization', authed(leadToken))
+        .send({ email: 'second@example.com' })
+        .expect(201);
+
+      const team = await request(app.getHttpServer())
+        .post(`/organizations/${orgId}/teams`)
+        .set('Authorization', authed(leadToken))
+        .send({ name: 'Engineering' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post(`/organizations/${orgId}/teams/${team.body.id}/members`)
+        .set('Authorization', authed(leadToken))
+        .send({ email: 'second@example.com', role: 'LEAD' })
+        .expect(201);
+
+      return request(app.getHttpServer())
+        .delete(
+          `/organizations/${orgId}/teams/${team.body.id}/members/${secondUserId}`,
+        )
+        .set('Authorization', authed(leadToken))
+        .expect(204);
+    });
+
+    it('a lead can rename and delete their own team', async () => {
+      const { accessToken: leadToken } =
+        await registerAndLogin('lead@example.com');
+      const orgId = await createOrg(leadToken);
+
+      const team = await request(app.getHttpServer())
+        .post(`/organizations/${orgId}/teams`)
+        .set('Authorization', authed(leadToken))
+        .send({ name: 'Old Name' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .patch(`/organizations/${orgId}/teams/${team.body.id}`)
+        .set('Authorization', authed(leadToken))
+        .send({ name: 'New Name' })
+        .expect(200)
+        .expect((res: Response) => {
+          expect(res.body.name).toBe('New Name');
+        });
+
+      await request(app.getHttpServer())
+        .delete(`/organizations/${orgId}/teams/${team.body.id}`)
+        .set('Authorization', authed(leadToken))
+        .expect(204);
+
+      // Confirmed gone - even the org owner/lead now gets 404 for it.
+      return request(app.getHttpServer())
+        .get(`/organizations/${orgId}/teams/${team.body.id}`)
+        .set('Authorization', authed(leadToken))
+        .expect(404);
+    });
+
+    it('deleting an organization cascades to delete its teams and team memberships', async () => {
+      const { accessToken: leadToken } =
+        await registerAndLogin('lead@example.com');
+      const orgId = await createOrg(leadToken);
+
+      const team = await request(app.getHttpServer())
+        .post(`/organizations/${orgId}/teams`)
+        .set('Authorization', authed(leadToken))
+        .send({ name: 'Engineering' })
+        .expect(201);
+
+      // Confirm the team really exists before we verify cascade behaviour.
+      await request(app.getHttpServer())
+        .get(`/organizations/${orgId}/teams/${team.body.id}`)
+        .set('Authorization', authed(leadToken))
+        .expect(200);
+
+      const teamCountBefore = await prisma.team.findMany({
+        where: { organizationId: orgId },
+      });
+      expect(teamCountBefore).toHaveLength(1);
+
+      // There's no DELETE /organizations/:id route yet (Phase 04 didn't add
+      // one), so we exercise the cascade directly at the database level to
+      // confirm the FK constraint itself is correct - the same constraint
+      // that would fire if/when an organization-delete route is added.
+      await prisma.organization.delete({ where: { id: orgId } });
+
+      const remainingTeams = await prisma.team.findMany({
+        where: { organizationId: orgId },
+      });
+      expect(remainingTeams).toHaveLength(0);
     });
   });
 });

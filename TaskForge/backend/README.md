@@ -1,23 +1,23 @@
 # TaskForge Backend
 
-A NestJS + TypeScript backend backed by PostgreSQL via Prisma, with JWT authentication and multi-tenant organizations.
+A NestJS + TypeScript backend backed by PostgreSQL via Prisma, with JWT authentication, multi-tenant organizations, and teams.
 
-## What exists (Phase 04)
+## What exists (Phase 05)
 
 - **Auth:** `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`
-- **Users:** `GET /users/:id` (self, or anyone sharing an organization with you), `PATCH /users/:id`, `DELETE /users/:id` (self only)
-- **Organizations:**
-  - `POST /organizations` — create one (you become its ADMIN)
-  - `GET /organizations` — list organizations you belong to
-  - `GET /organizations/:id` — details (members only — 404 for non-members)
-  - `PATCH /organizations/:id` — rename (admins only)
-  - `GET /organizations/:id/members` — list members (members only)
-  - `POST /organizations/:id/members` — add an existing user by email (admins only)
-  - `PATCH /organizations/:id/members/:userId` — change a member's role (admins only)
-  - `DELETE /organizations/:id/members/:userId` — remove a member (admins only)
+- **Users:** `GET /users/:id` (self, or anyone sharing an organization with you), `PATCH /users/:id`, `DELETE /users/:id`
+- **Organizations:** create/list/get/rename, member management, admin-gated mutations, a "last admin" safety rail
+- **Teams** (new): a subdivision within an organization
+  - `POST /organizations/:id/teams` — create (any org member; you become its LEAD)
+  - `GET /organizations/:id/teams` — list teams in the org (any org member)
+  - `GET /organizations/:id/teams/:teamId` — team details (any org member — teams aren't private within their org)
+  - `PATCH/DELETE /organizations/:id/teams/:teamId` — rename/delete (team LEAD only)
+  - `GET /organizations/:id/teams/:teamId/members` — list members (any org member)
+  - `POST/PATCH/DELETE .../members[/:userId]` — manage team membership (team LEAD only)
+  - Adding someone to a team requires them to already be an organization member (422 otherwise)
+  - A "last lead" safety rail, mirroring the organization's "last admin" rule
 - `GET /health` — liveness check that also verifies database connectivity
-- Tenant isolation is enforced server-side by `OrganizationMembershipGuard` on every organization-scoped route — a non-member gets 404, never 403
-- A "last admin" safety rail prevents an organization from ever ending up with zero admins
+- Nested resource ownership is independently verified at every level — a team ID from one organization can't be accessed through a different organization's URL (a classic IDOR pattern, explicitly guarded against and tested)
 
 ## Run locally
 
@@ -44,27 +44,27 @@ npm run lint
 npm run build
 ```
 
-## Trying the multi-tenancy flow manually
+## Trying the teams flow manually
 
 ```bash
-# Register two accounts
+# Register a lead and an org member
 curl -X POST http://localhost:3000/auth/register -H "Content-Type: application/json" \
-  -d '{"email":"admin@acme.com","name":"Admin","password":"password1"}'
+  -d '{"email":"lead@acme.com","name":"Lead","password":"password1"}'
 curl -X POST http://localhost:3000/auth/register -H "Content-Type: application/json" \
-  -d '{"email":"outsider@x.com","name":"Outsider","password":"password1"}'
+  -d '{"email":"member@acme.com","name":"Member","password":"password1"}'
 
-# Using the admin's accessToken, create an organization
-curl -X POST http://localhost:3000/organizations \
-  -H "Authorization: Bearer <adminAccessToken>" -H "Content-Type: application/json" \
-  -d '{"name":"Acme Inc."}'
+# Create an org, add the member, create a team
+curl -X POST http://localhost:3000/organizations -H "Authorization: Bearer <leadToken>" \
+  -H "Content-Type: application/json" -d '{"name":"Acme"}'
+curl -X POST http://localhost:3000/organizations/<orgId>/members -H "Authorization: Bearer <leadToken>" \
+  -H "Content-Type: application/json" -d '{"email":"member@acme.com"}'
+curl -X POST http://localhost:3000/organizations/<orgId>/teams -H "Authorization: Bearer <leadToken>" \
+  -H "Content-Type: application/json" -d '{"name":"Engineering"}'
 
-# The outsider trying to view that org (by id) gets 404, not 403
-curl http://localhost:3000/organizations/<orgId> -H "Authorization: Bearer <outsiderAccessToken>"
-
-# Add the outsider as a member (admin-only)
-curl -X POST http://localhost:3000/organizations/<orgId>/members \
-  -H "Authorization: Bearer <adminAccessToken>" -H "Content-Type: application/json" \
-  -d '{"email":"outsider@x.com"}'
+# Add the org member to the team
+curl -X POST http://localhost:3000/organizations/<orgId>/teams/<teamId>/members \
+  -H "Authorization: Bearer <leadToken>" -H "Content-Type: application/json" \
+  -d '{"email":"member@acme.com"}'
 ```
 
 ## Database
@@ -79,4 +79,4 @@ curl -X POST http://localhost:3000/organizations/<orgId>/members \
 
 ## Structure
 
-Domain module folders (`teams/`, `projects/`, `boards/`, `tasks/`, `comments/`, `notifications/`, `files/`, `search/`, `activity/`, `audit/`) are still empty placeholders. See [`../docs/folder-structure.md`](../docs/folder-structure.md) and [`../docs/architecture.md`](../docs/architecture.md).
+Domain module folders (`projects/`, `boards/`, `tasks/`, `comments/`, `notifications/`, `files/`, `search/`, `activity/`, `audit/`) are still empty placeholders. See [`../docs/folder-structure.md`](../docs/folder-structure.md) and [`../docs/architecture.md`](../docs/architecture.md).

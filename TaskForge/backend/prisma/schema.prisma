@@ -35,6 +35,7 @@ model User {
   hashedRefreshToken String? @map("hashed_refresh_token") @db.VarChar(255)
 
   memberships Membership[]
+  teamMemberships TeamMembership[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -61,6 +62,7 @@ model Organization {
   slug String @unique @db.VarChar(160)
 
   memberships Membership[]
+  teams       Team[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -104,4 +106,60 @@ model Membership {
   @@index([organizationId])
   @@index([userId])
   @@map("memberships")
+}
+
+/// A smaller working group WITHIN an organization - e.g. "Engineering" or
+/// "Design". A Team belongs to exactly one Organization; it does not exist
+/// independently. Deleting an Organization cascades to delete its Teams.
+///
+/// Any member of an Organization can currently create a Team and see every
+/// Team in their Organization (teams are not private groups within a
+/// tenant - the tenant boundary is the Organization, not the Team). Only a
+/// Team's own LEAD can rename it, delete it, or manage its membership.
+model Team {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  name           String @db.VarChar(150)
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberships  TeamMembership[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId])
+  @@map("teams")
+}
+
+/// Which role a TeamMembership grants within its Team. Deliberately a
+/// separate enum from MembershipRole - team-level permissions and
+/// organization-level permissions are different concerns, and reusing one
+/// enum for both would blur that a user's ADMIN status in the organization
+/// says nothing about their role (or even membership) in any given Team.
+enum TeamRole {
+  LEAD
+  MEMBER
+}
+
+/// The join model connecting a User to a Team. A precondition enforced in
+/// application code (not the database): a user can only be added to a Team
+/// if they are already a member of that Team's Organization - see
+/// TeamsService.addMember() and docs/phase-05-concepts.md.
+model TeamMembership {
+  id     String @id @default(uuid()) @db.Uuid
+  teamId String @map("team_id") @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  role TeamRole @default(MEMBER)
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, teamId])
+  @@index([teamId])
+  @@index([userId])
+  @@map("team_memberships")
 }
