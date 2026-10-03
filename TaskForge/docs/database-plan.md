@@ -20,7 +20,7 @@ This document describes the **planned** database evolution, phase by phase. Noth
 | 04 | `Organization`, `Membership` (with `MembershipRole` enum) |
 | 05 | `Team`, `TeamMembership` |
 | 06 | (role/permission fields on membership models — no new tables initially) |
-| 07 | `Project`, `ProjectMembership` |
+| 07 | `Project`, `ProjectMembership` (with `ProjectStatus` and `ProjectRole` enums) — implemented; see `docs/phase-07-concepts.md` |
 | 08 | `Board`, `Column`, `Task` |
 | 10 | `Comment`, `Label`, `TaskLabel` |
 | 11 | (no new tables — WebSocket events reference existing models) |
@@ -50,7 +50,8 @@ User ──< OrganizationMembership >── Organization
 
 - `MembershipRole`: `ADMIN`, `MANAGER`, `MEMBER`
 - `TaskStatus`: derived from `Column` (status is really "which column"), but a simple `TaskPriority` enum will exist: `LOW`, `MEDIUM`, `HIGH`, `URGENT`
-- `ProjectStatus`: `ACTIVE`, `ARCHIVED`
+- `ProjectStatus`: `ACTIVE`, `ARCHIVED` (implemented in Phase 07; archiving replaces a `deletedAt` soft-delete column — see `docs/phase-07-concepts.md`)
+- `ProjectRole`: `LEAD`, `MEMBER` (implemented in Phase 07)
 
 ## Notes on Multi-Tenant Data Isolation at the Database Level
 

@@ -16,8 +16,10 @@ TaskForge is a multi-tenant project management platform inspired by tools like J
 **Phase 03 — Authentication** ✅ Complete
 **Phase 04 — Multi-Tenancy** ✅ Complete
 **Phase 05 — Teams** ✅ Complete
+**Phase 06 — RBAC** ✅ Complete
+**Phase 07 — Projects** ✅ Complete
 
-TaskForge now supports Teams within an Organization - a subdivision of an org's people, each with its own LEAD. Nested resource ownership is verified independently at every level (an IDOR-style bug - a team ID from one org being used under a different org's URL - is explicitly caught and tested against). See [`docs/`](./docs) for architecture and [Setup](#setup) below to run it.
+TaskForge now has **projects**: private workspaces inside an organization, visible only to their members (and to organization admins/managers, who oversee everything). Projects can be edited, archived (reversibly), and permanently deleted from the archive; each has its own members with a `LEAD` or `MEMBER` role. Phase 07 also fixed two issues inherited from earlier phases — see [`docs/phase-07-concepts.md`](./docs/phase-07-concepts.md). See [`docs/`](./docs) for architecture and [Setup](#setup) below to run it.
 
 ---
 
@@ -31,7 +33,7 @@ TaskForge lets teams inside an organization plan, track, and collaborate on work
 - Multi-tenant organizations with strict data isolation
 - Teams and team membership
 - Role-based access control (Admin / Manager / Member)
-- Projects, boards, columns, and tasks
+- Projects (private to their members), boards, columns, and tasks
 - Comments, labels, priorities, due dates, attachments
 - Real-time updates via WebSockets
 - Background jobs via Redis + BullMQ
@@ -78,6 +80,8 @@ See [`docs/folder-structure.md`](./docs/folder-structure.md).
 - [`docs/phase-03-concepts.md`](./docs/phase-03-concepts.md) — concepts learned in Phase 03 (password hashing, JWTs, refresh token rotation, a real bug we hit and fixed)
 - [`docs/phase-04-concepts.md`](./docs/phase-04-concepts.md) — concepts learned in Phase 04 (multi-tenancy, tenant isolation guards, a real Phase 03 leak we found and fixed)
 - [`docs/phase-05-concepts.md`](./docs/phase-05-concepts.md) — concepts learned in Phase 05 (nested resource ownership, IDOR, guard chains)
+- [`docs/phase-06-concepts.md`](./docs/phase-06-concepts.md) — concepts learned in Phase 06 (RBAC, permissions vs roles, declarative guards)
+- [`docs/phase-07-concepts.md`](./docs/phase-07-concepts.md) — concepts learned in Phase 07 (private resources, visibility vs permission, 404 vs 403, archive vs delete, two issues found and fixed)
 
 ## Setup
 
