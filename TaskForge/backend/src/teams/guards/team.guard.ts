@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+import { isUuid } from '../../common/utils/is-uuid';
 
 /**
  * WHAT: Verifies that the `:teamId` in the route actually belongs to the
@@ -41,7 +42,8 @@ export class TeamGuard implements CanActivate {
     const organizationId: string | undefined = request.params?.id;
     const teamId: string | undefined = request.params?.teamId;
 
-    if (!organizationId || !teamId) {
+    // Malformed IDs are "not found", not a database error - see `isUuid`.
+    if (!isUuid(organizationId) || !isUuid(teamId)) {
       throw new NotFoundException('Team not found');
     }
 

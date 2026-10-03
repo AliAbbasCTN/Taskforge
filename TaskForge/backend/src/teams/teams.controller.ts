@@ -16,9 +16,11 @@ import {
   AuthenticatedUser,
   CurrentUser,
 } from '../common/decorators/current-user.decorator';
+import { Permission } from '../common/authorization/permission.enum';
+import { RequirePermission } from '../common/authorization/require-permission.decorator';
 import { OrganizationMembershipGuard } from '../organizations/guards/organization-membership.guard';
 import { TeamGuard } from './guards/team.guard';
-import { TeamLeadGuard } from './guards/team-lead.guard';
+import { TeamPermissionGuard } from './guards/team-permission.guard';
 import { TeamsService } from './teams.service';
 import { CreateTeamDto } from './dto/create-team.dto';
 import { UpdateTeamDto } from './dto/update-team.dto';
@@ -33,30 +35,33 @@ import { UpdateTeamMemberRoleDto } from './dto/update-team-member-role.dto';
  *   POST   /organizations/:id/teams                          - create a team (any org member; you become its LEAD)
  *   GET    /organizations/:id/teams                           - list teams in the org (any org member)
  *   GET    /organizations/:id/teams/:teamId                    - team details (any org member)
- *   PATCH  /organizations/:id/teams/:teamId                    - rename (team LEAD only)
- *   DELETE /organizations/:id/teams/:teamId                    - delete (team LEAD only)
+ *   PATCH  /organizations/:id/teams/:teamId                    - rename (requires team:manage)
+ *   DELETE /organizations/:id/teams/:teamId                    - delete (requires team:manage)
  *   GET    /organizations/:id/teams/:teamId/members             - list members (any org member)
- *   POST   /organizations/:id/teams/:teamId/members             - add a member (team LEAD only)
- *   PATCH  /organizations/:id/teams/:teamId/members/:userId      - change a member's role (team LEAD only)
- *   DELETE /organizations/:id/teams/:teamId/members/:userId      - remove a member (team LEAD only)
+ *   POST   /organizations/:id/teams/:teamId/members             - add a member (requires team:members:manage)
+ *   PATCH  /organizations/:id/teams/:teamId/members/:userId      - change a member's role (requires team:members:manage)
+ *   DELETE /organizations/:id/teams/:teamId/members/:userId      - remove a member (requires team:members:manage)
  *
  * GUARD ORDER: `JwtAuthGuard` -> `OrganizationMembershipGuard` (applied at
- * the controller level, since every route here requires org membership) ->
- * `TeamGuard` on routes with a `:teamId` (verifies the team really belongs
- * to this organization) -> `TeamLeadGuard` on mutation routes. Each guard
+ * the controller level) -> `TeamGuard` on routes with a `:teamId` (verifies
+ * the team really belongs to this organization) -> `TeamPermissionGuard` on
+ * mutation routes (declared via `@RequirePermission(...)`). Each guard
  * depends on data the previous one attached to the request, so this order
  * is load-bearing, not cosmetic.
+ *
+ * PHASE 06 CHANGE: `TeamLeadGuard` (Phase 05, "must be this team's LEAD,
+ * full stop") is now `TeamPermissionGuard`. The permission it checks is the
+ * same as before (`team:manage` / `team:members:manage`, both held only by
+ * LEAD) - BUT the guard now ALSO grants access to anyone holding
+ * `organization:teams:manage-any` (ADMIN or MANAGER) at the organization
+ * level, even if they aren't personally on the team. This closes the gap
+ * Phase 05's own docs flagged: an organization admin previously had no way
+ * to manage a team they didn't lead.
  *
  * WHY the route prefix repeats `:id` (matching `OrganizationsController`,
  * not `:organizationId`): `OrganizationMembershipGuard` reads
  * `request.params.id` directly. Keeping the same param name here means the
  * exact same guard class works on both controllers with zero changes.
- *
- * SCOPE NOTE: as with organizations, there's no generalized RBAC yet - only
- * "team LEAD" vs "everyone else" is distinguished. An organization ADMIN
- * has no special override power over a team they don't lead. That's a
- * reasonable gap for this phase, not an oversight - see
- * docs/phase-05-concepts.md.
  */
 @Controller('organizations/:id/teams')
 @UseGuards(JwtAuthGuard, OrganizationMembershipGuard)
@@ -84,7 +89,8 @@ export class TeamsController {
   }
 
   @Patch(':teamId')
-  @UseGuards(TeamGuard, TeamLeadGuard)
+  @RequirePermission(Permission.TeamManage)
+  @UseGuards(TeamGuard, TeamPermissionGuard)
   update(
     @Param('teamId', ParseUUIDPipe) teamId: string,
     @Body() dto: UpdateTeamDto,
@@ -94,7 +100,8 @@ export class TeamsController {
 
   @Delete(':teamId')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @UseGuards(TeamGuard, TeamLeadGuard)
+  @RequirePermission(Permission.TeamManage)
+  @UseGuards(TeamGuard, TeamPermissionGuard)
   remove(@Param('teamId', ParseUUIDPipe) teamId: string) {
     return this.teamsService.remove(teamId);
   }
@@ -106,7 +113,8 @@ export class TeamsController {
   }
 
   @Post(':teamId/members')
-  @UseGuards(TeamGuard, TeamLeadGuard)
+  @RequirePermission(Permission.TeamMembersManage)
+  @UseGuards(TeamGuard, TeamPermissionGuard)
   addMember(
     @Param('id', ParseUUIDPipe) organizationId: string,
     @Param('teamId', ParseUUIDPipe) teamId: string,
@@ -116,7 +124,8 @@ export class TeamsController {
   }
 
   @Patch(':teamId/members/:userId')
-  @UseGuards(TeamGuard, TeamLeadGuard)
+  @RequirePermission(Permission.TeamMembersManage)
+  @UseGuards(TeamGuard, TeamPermissionGuard)
   updateMemberRole(
     @Param('teamId', ParseUUIDPipe) teamId: string,
     @Param('userId', ParseUUIDPipe) userId: string,
@@ -127,7 +136,8 @@ export class TeamsController {
 
   @Delete(':teamId/members/:userId')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @UseGuards(TeamGuard, TeamLeadGuard)
+  @RequirePermission(Permission.TeamMembersManage)
+  @UseGuards(TeamGuard, TeamPermissionGuard)
   removeMember(
     @Param('teamId', ParseUUIDPipe) teamId: string,
     @Param('userId', ParseUUIDPipe) userId: string,

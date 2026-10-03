@@ -3,7 +3,7 @@ import { UsersModule } from '../users/users.module';
 import { TeamsController } from './teams.controller';
 import { TeamsService } from './teams.service';
 import { TeamGuard } from './guards/team.guard';
-import { TeamLeadGuard } from './guards/team-lead.guard';
+import { TeamPermissionGuard } from './guards/team-permission.guard';
 import { OrganizationMembershipGuard } from '../organizations/guards/organization-membership.guard';
 
 /**
@@ -23,7 +23,7 @@ import { OrganizationMembershipGuard } from '../organizations/guards/organizatio
     TeamsService,
     OrganizationMembershipGuard,
     TeamGuard,
-    TeamLeadGuard,
+    TeamPermissionGuard,
   ],
 })
 export class TeamsModule {}

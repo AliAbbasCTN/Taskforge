@@ -36,6 +36,7 @@ model User {
 
   memberships Membership[]
   teamMemberships TeamMembership[]
+  projectMemberships ProjectMembership[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -63,6 +64,7 @@ model Organization {
 
   memberships Membership[]
   teams       Team[]
+  projects    Project[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -162,4 +164,82 @@ model TeamMembership {
   @@index([teamId])
   @@index([userId])
   @@map("team_memberships")
+}
+
+/// Whether a Project is in active use. ARCHIVED is the reversible "put it
+/// away" state - an archived project keeps all its data and members but is
+/// read-only until someone unarchives it. This (plus permanent deletion,
+/// which is only allowed from ARCHIVED) is why Project has no `deletedAt`
+/// soft-delete column: archiving already IS the undoable step.
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+/// A body of work inside an Organization - the thing boards and tasks will
+/// belong to (Phase 08). A Project belongs to exactly one Organization;
+/// deleting the Organization cascades to delete its Projects.
+///
+/// Unlike Teams, projects are NOT visible to every organization member: a
+/// project is visible only to its own members, plus organization ADMINs and
+/// MANAGERs who oversee everything. That visibility rule is enforced in
+/// application code (see ProjectGuard) - the schema only stores who is a
+/// member.
+model Project {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  name           String @db.VarChar(150)
+
+  /// Optional free-text summary. NULL (not an empty string) means "none".
+  description String? @db.VarChar(2000)
+
+  status     ProjectStatus @default(ACTIVE)
+  /// Set when the project is archived, cleared when it is unarchived.
+  archivedAt DateTime?     @map("archived_at")
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberships  ProjectMembership[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// Serves "list this organization's projects, filtered by status" - the
+  /// main query. Because organizationId is the leading column, this one
+  /// composite index also serves plain "all projects in this org" lookups,
+  /// so a separate single-column organizationId index would be redundant.
+  @@index([organizationId, status])
+  @@map("projects")
+}
+
+/// Which role a ProjectMembership grants within its Project. A third
+/// separate enum (alongside MembershipRole and TeamRole) for the same reason
+/// TeamRole is separate from MembershipRole: a person's authority over an
+/// organization, a team, and a project are three independent questions.
+enum ProjectRole {
+  LEAD
+  MEMBER
+}
+
+/// The join model connecting a User to a Project. Two preconditions are
+/// enforced in application code, not the database: the user must already be
+/// a member of the Project's Organization (see ProjectsService.addMember()),
+/// and when a user is removed from an Organization their ProjectMemberships
+/// in it are removed too (see OrganizationsService.removeMember()).
+model ProjectMembership {
+  id        String @id @default(uuid()) @db.Uuid
+  projectId String @map("project_id") @db.Uuid
+  userId    String @map("user_id") @db.Uuid
+
+  role ProjectRole @default(MEMBER)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, projectId])
+  @@index([projectId])
+  @@index([userId])
+  @@map("project_memberships")
 }

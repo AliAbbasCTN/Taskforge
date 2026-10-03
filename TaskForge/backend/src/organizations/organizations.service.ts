@@ -196,7 +196,23 @@ export class OrganizationsService {
       await this.assertNotLastAdmin(organizationId);
     }
 
-    await this.prisma.membership.delete({ where: { id: membership.id } });
+    // Leaving an organization means leaving EVERYTHING inside it. Team and
+    // project memberships are separate rows that nothing else ties to the
+    // organization membership (a TeamMembership points at a Team and a
+    // User, not at a Membership), so they must be removed explicitly - and
+    // atomically with the organization membership itself, so a failure
+    // part-way can't leave a half-removed user. Without this, the stale rows
+    // would come back to life with their old roles if the person were ever
+    // re-added to the organization. See docs/phase-07-concepts.md.
+    await this.prisma.$transaction([
+      this.prisma.teamMembership.deleteMany({
+        where: { userId: targetUserId, team: { organizationId } },
+      }),
+      this.prisma.projectMembership.deleteMany({
+        where: { userId: targetUserId, project: { organizationId } },
+      }),
+      this.prisma.membership.delete({ where: { id: membership.id } }),
+    ]);
   }
 
   async updateMemberRole(

@@ -29,6 +29,8 @@ describe('OrganizationsService', () => {
       delete: jest.Mock;
       count: jest.Mock;
     };
+    teamMembership: { deleteMany: jest.Mock };
+    projectMembership: { deleteMany: jest.Mock };
     $transaction: jest.Mock;
   };
   let usersService: { findByEmailSafe: jest.Mock };
@@ -52,6 +54,8 @@ describe('OrganizationsService', () => {
         delete: jest.fn(),
         count: jest.fn(),
       },
+      teamMembership: { deleteMany: jest.fn() },
+      projectMembership: { deleteMany: jest.fn() },
       $transaction: jest.fn(),
     };
     usersService = { findByEmailSafe: jest.fn() };
@@ -239,6 +243,46 @@ describe('OrganizationsService', () => {
       await service.removeMember(orgId, otherUserId);
       expect(prisma.membership.count).not.toHaveBeenCalled();
       expect(prisma.membership.delete).toHaveBeenCalled();
+    });
+
+    it('removeMember also removes team and project memberships in that organization, atomically', async () => {
+      prisma.membership.findUnique.mockResolvedValue({
+        id: 'm2',
+        userId: otherUserId,
+        organizationId: orgId,
+        role: MembershipRole.MEMBER,
+      });
+
+      await service.removeMember(orgId, otherUserId);
+
+      // Scoped to THIS organization - memberships in other organizations
+      // must be untouched.
+      expect(prisma.teamMembership.deleteMany).toHaveBeenCalledWith({
+        where: { userId: otherUserId, team: { organizationId: orgId } },
+      });
+      expect(prisma.projectMembership.deleteMany).toHaveBeenCalledWith({
+        where: { userId: otherUserId, project: { organizationId: orgId } },
+      });
+      // All three deletes are submitted together as ONE transaction.
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(prisma.$transaction.mock.calls[0][0]).toHaveLength(3);
+    });
+
+    it('removeMember does not touch team/project memberships when the removal is refused', async () => {
+      prisma.membership.findUnique.mockResolvedValue({
+        id: 'm1',
+        userId,
+        organizationId: orgId,
+        role: MembershipRole.ADMIN,
+      });
+      prisma.membership.count.mockResolvedValue(1);
+
+      await expect(service.removeMember(orgId, userId)).rejects.toThrow(
+        ConflictException,
+      );
+      expect(prisma.teamMembership.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.projectMembership.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
     it('updateMemberRole refuses to demote the only remaining admin', async () => {

@@ -3,7 +3,7 @@ import { UsersModule } from '../users/users.module';
 import { OrganizationsController } from './organizations.controller';
 import { OrganizationsService } from './organizations.service';
 import { OrganizationMembershipGuard } from './guards/organization-membership.guard';
-import { OrganizationAdminGuard } from './guards/organization-admin.guard';
+import { OrganizationPermissionGuard } from './guards/organization-permission.guard';
 
 @Module({
   imports: [UsersModule],
@@ -11,7 +11,7 @@ import { OrganizationAdminGuard } from './guards/organization-admin.guard';
   providers: [
     OrganizationsService,
     OrganizationMembershipGuard,
-    OrganizationAdminGuard,
+    OrganizationPermissionGuard,
   ],
 })
 export class OrganizationsModule {}

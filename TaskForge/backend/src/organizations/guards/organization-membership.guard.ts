@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+import { isUuid } from '../../common/utils/is-uuid';
 
 /**
  * WHAT: The guard that enforces TaskForge's core tenant-isolation rule -
@@ -44,10 +45,13 @@ export class OrganizationMembershipGuard implements CanActivate {
     const organizationId: string | undefined = request.params?.id;
     const userId: string | undefined = request.user?.id;
 
-    if (!organizationId || !userId) {
-      // Missing params/user means something upstream is misconfigured
-      // (e.g. this guard applied to a route with no `:id`, or applied
-      // before JwtAuthGuard) - fail closed rather than silently passing.
+    // Missing params/user means something upstream is misconfigured (e.g.
+    // this guard applied to a route with no `:id`, or applied before
+    // JwtAuthGuard) - fail closed rather than silently passing. A malformed
+    // ID is rejected here too (as "not found") because guards run BEFORE
+    // `ParseUUIDPipe`, so without this check the raw string would reach the
+    // database - see `isUuid`.
+    if (!isUuid(organizationId) || !userId) {
       throw new NotFoundException('Organization not found');
     }
 

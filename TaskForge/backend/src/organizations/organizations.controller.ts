@@ -16,12 +16,14 @@ import {
   AuthenticatedUser,
   CurrentUser,
 } from '../common/decorators/current-user.decorator';
+import { Permission } from '../common/authorization/permission.enum';
+import { RequirePermission } from '../common/authorization/require-permission.decorator';
 import {
   CurrentMembership,
   RequestMembership,
 } from './decorators/current-membership.decorator';
 import { OrganizationMembershipGuard } from './guards/organization-membership.guard';
-import { OrganizationAdminGuard } from './guards/organization-admin.guard';
+import { OrganizationPermissionGuard } from './guards/organization-permission.guard';
 import { OrganizationsService } from './organizations.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
@@ -35,25 +37,33 @@ import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
  *   POST   /organizations                       - create an org (you become its ADMIN)
  *   GET    /organizations                        - list organizations YOU belong to
  *   GET    /organizations/:id                     - org details (members only)
- *   PATCH  /organizations/:id                     - rename an org (admins only)
+ *   PATCH  /organizations/:id                     - rename an org (requires organization:manage)
  *   GET    /organizations/:id/members             - list members (members only)
- *   POST   /organizations/:id/members             - add an existing user (admins only)
- *   PATCH  /organizations/:id/members/:userId      - change a member's role (admins only)
- *   DELETE /organizations/:id/members/:userId      - remove a member (admins only)
+ *   POST   /organizations/:id/members             - add an existing user (requires organization:members:manage)
+ *   PATCH  /organizations/:id/members/:userId      - change a member's role (requires organization:members:manage)
+ *   DELETE /organizations/:id/members/:userId      - remove a member (requires organization:members:manage)
  *
  * GUARD ORDER MATTERS: `JwtAuthGuard` must run first (it populates
  * `request.user`), then `OrganizationMembershipGuard` (it populates
  * `request.membership` and enforces tenant isolation), then
- * `OrganizationAdminGuard` where a route additionally requires the ADMIN
- * role. NestJS runs guards in the order listed, so this order is not
- * cosmetic - swapping it would break the checks.
+ * `OrganizationPermissionGuard` where a route additionally requires a
+ * specific permission (declared via `@RequirePermission(...)`). NestJS
+ * runs guards in the order listed, so this order is not cosmetic - swapping
+ * it would break the checks.
+ *
+ * PHASE 06 CHANGE: `OrganizationAdminGuard` (Phase 04, a single hardcoded
+ * "must be ADMIN" check) is now `OrganizationPermissionGuard`, driven by
+ * `@RequirePermission(...)`. Currently, only ADMIN holds
+ * `organization:manage` and `organization:members:manage` (see
+ * `organization-permissions.ts`) - so the practical behaviour of these
+ * routes is unchanged from Phase 04. What changed is that MANAGER now
+ * exists as a real, distinct role with its own (different) permissions -
+ * see `TeamsController` for where MANAGER actually diverges from MEMBER.
  *
  * KNOWN DEFERRED FEATURE: there's no "leave organization" (self-removal)
- * endpoint yet - only an admin can remove a member, including removing
- * themselves (subject to the "can't remove the last admin" rule in the
- * service). Self-service leaving is a reasonable follow-up, deliberately
- * left out to keep this phase focused on the core tenant-isolation
- * mechanics.
+ * endpoint yet - only someone with `organization:members:manage` can remove
+ * a member, including removing themselves (subject to the "can't remove
+ * the last admin" rule in the service).
  */
 @Controller('organizations')
 @UseGuards(JwtAuthGuard)
@@ -84,7 +94,8 @@ export class OrganizationsController {
   }
 
   @Patch(':id')
-  @UseGuards(OrganizationMembershipGuard, OrganizationAdminGuard)
+  @RequirePermission(Permission.OrganizationManage)
+  @UseGuards(OrganizationMembershipGuard, OrganizationPermissionGuard)
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateOrganizationDto,
@@ -99,13 +110,15 @@ export class OrganizationsController {
   }
 
   @Post(':id/members')
-  @UseGuards(OrganizationMembershipGuard, OrganizationAdminGuard)
+  @RequirePermission(Permission.OrganizationMembersManage)
+  @UseGuards(OrganizationMembershipGuard, OrganizationPermissionGuard)
   addMember(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AddMemberDto) {
     return this.organizationsService.addMember(id, dto);
   }
 
   @Patch(':id/members/:userId')
-  @UseGuards(OrganizationMembershipGuard, OrganizationAdminGuard)
+  @RequirePermission(Permission.OrganizationMembersManage)
+  @UseGuards(OrganizationMembershipGuard, OrganizationPermissionGuard)
   updateMemberRole(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('userId', ParseUUIDPipe) userId: string,
@@ -116,7 +129,8 @@ export class OrganizationsController {
 
   @Delete(':id/members/:userId')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @UseGuards(OrganizationMembershipGuard, OrganizationAdminGuard)
+  @RequirePermission(Permission.OrganizationMembersManage)
+  @UseGuards(OrganizationMembershipGuard, OrganizationPermissionGuard)
   removeMember(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('userId', ParseUUIDPipe) userId: string,
