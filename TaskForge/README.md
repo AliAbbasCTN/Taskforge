@@ -18,8 +18,10 @@ TaskForge is a multi-tenant project management platform inspired by tools like J
 **Phase 05 — Teams** ✅ Complete
 **Phase 06 — RBAC** ✅ Complete
 **Phase 07 — Projects** ✅ Complete
+**Phase 08 — Boards, Columns & Tasks** ✅ Complete
+**Phase 09 — React Frontend** ✅ Complete
 
-TaskForge now has **projects**: private workspaces inside an organization, visible only to their members (and to organization admins/managers, who oversee everything). Projects can be edited, archived (reversibly), and permanently deleted from the archive; each has its own members with a `LEAD` or `MEMBER` role. Phase 07 also fixed two issues inherited from earlier phases — see [`docs/phase-07-concepts.md`](./docs/phase-07-concepts.md). See [`docs/`](./docs) for architecture and [Setup](#setup) below to run it.
+TaskForge now has a **web interface**. Log in or register, switch between your organizations, browse and create projects, and work on a kanban board: add tasks to columns and move them along. It is a React + TypeScript + Vite app (in [`frontend/`](./frontend)) that talks to the backend API from Phases 03-08, with silent session refresh and role-aware controls. Task details, comments and drag-and-drop arrive in Phase 10. See [`docs/phase-09-concepts.md`](./docs/phase-09-concepts.md), [`docs/`](./docs) for architecture, and [Setup](#setup) below to run it.
 
 ---
 
@@ -82,6 +84,8 @@ See [`docs/folder-structure.md`](./docs/folder-structure.md).
 - [`docs/phase-05-concepts.md`](./docs/phase-05-concepts.md) — concepts learned in Phase 05 (nested resource ownership, IDOR, guard chains)
 - [`docs/phase-06-concepts.md`](./docs/phase-06-concepts.md) — concepts learned in Phase 06 (RBAC, permissions vs roles, declarative guards)
 - [`docs/phase-07-concepts.md`](./docs/phase-07-concepts.md) — concepts learned in Phase 07 (private resources, visibility vs permission, 404 vs 403, archive vs delete, two issues found and fixed)
+- [`docs/phase-08-concepts.md`](./docs/phase-08-concepts.md) — concepts learned in Phase 08 (ordered lists in SQL, status-as-column, structure vs content permissions, five levels of ownership checks)
+- [`docs/phase-09-concepts.md`](./docs/phase-09-concepts.md) — concepts learned in Phase 09 (React components/state/hooks, auth on the frontend, token storage trade-offs, protected routes, server state, why the UI is never the security boundary)
 
 ## Setup
 
@@ -148,9 +152,28 @@ npx prisma migrate dev    # create + apply a migration after a schema change
 npx prisma generate       # regenerate the typed client
 ```
 
-### Frontend
+### 3. Run the frontend
 
-Not built yet — introduced in Phase 09.
+With the backend running (step 2), in a second terminal:
+
+```bash
+cd frontend
+cp .env.example .env     # VITE_API_URL=http://localhost:3000
+npm install
+npm run dev
+```
+
+Open **http://localhost:5173**, create an account, make an organization, then a project, then a board.
+
+The port matters: the backend's `CORS_ORIGIN` allows exactly `http://localhost:5173`, so the dev server is configured to fail rather than silently pick another port.
+
+```bash
+npm run test        # frontend unit tests (no backend needed)
+npm run typecheck   # TypeScript check
+npm run build       # type-check + production build into dist/
+```
+
+See [`frontend/README.md`](./frontend/README.md) for details.
 
 ## License
 

@@ -21,7 +21,7 @@ This document describes the **planned** database evolution, phase by phase. Noth
 | 05 | `Team`, `TeamMembership` |
 | 06 | (role/permission fields on membership models — no new tables initially) |
 | 07 | `Project`, `ProjectMembership` (with `ProjectStatus` and `ProjectRole` enums) — implemented; see `docs/phase-07-concepts.md` |
-| 08 | `Board`, `Column`, `Task` |
+| 08 | `Board`, `BoardColumn`, `Task` (with `TaskPriority` enum) — implemented; see `docs/phase-08-concepts.md`. Labels stay in Phase 10 as planned |
 | 10 | `Comment`, `Label`, `TaskLabel` |
 | 11 | (no new tables — WebSocket events reference existing models) |
 | 12 | (BullMQ job data — not stored in Postgres, lives in Redis) |
