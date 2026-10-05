@@ -31,6 +31,7 @@ describe('OrganizationsService', () => {
     };
     teamMembership: { deleteMany: jest.Mock };
     projectMembership: { deleteMany: jest.Mock };
+    task: { updateMany: jest.Mock };
     $transaction: jest.Mock;
   };
   let usersService: { findByEmailSafe: jest.Mock };
@@ -56,6 +57,7 @@ describe('OrganizationsService', () => {
       },
       teamMembership: { deleteMany: jest.fn() },
       projectMembership: { deleteMany: jest.fn() },
+      task: { updateMany: jest.fn() },
       $transaction: jest.fn(),
     };
     usersService = { findByEmailSafe: jest.fn() };
@@ -245,7 +247,7 @@ describe('OrganizationsService', () => {
       expect(prisma.membership.delete).toHaveBeenCalled();
     });
 
-    it('removeMember also removes team and project memberships in that organization, atomically', async () => {
+    it('removeMember also removes team/project memberships and unassigns tasks in that organization, atomically', async () => {
       prisma.membership.findUnique.mockResolvedValue({
         id: 'm2',
         userId: otherUserId,
@@ -263,9 +265,17 @@ describe('OrganizationsService', () => {
       expect(prisma.projectMembership.deleteMany).toHaveBeenCalledWith({
         where: { userId: otherUserId, project: { organizationId: orgId } },
       });
-      // All three deletes are submitted together as ONE transaction.
+      // Their task assignments in this organization are cleared too.
+      expect(prisma.task.updateMany).toHaveBeenCalledWith({
+        where: {
+          assigneeId: otherUserId,
+          column: { board: { project: { organizationId: orgId } } },
+        },
+        data: { assigneeId: null },
+      });
+      // All four writes are submitted together as ONE transaction.
       expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-      expect(prisma.$transaction.mock.calls[0][0]).toHaveLength(3);
+      expect(prisma.$transaction.mock.calls[0][0]).toHaveLength(4);
     });
 
     it('removeMember does not touch team/project memberships when the removal is refused', async () => {

@@ -1,8 +1,8 @@
 # TaskForge Backend
 
-A NestJS + TypeScript backend backed by PostgreSQL via Prisma, with JWT authentication, multi-tenant organizations, teams, RBAC, and projects.
+A NestJS + TypeScript backend backed by PostgreSQL via Prisma, with JWT authentication, multi-tenant organizations, teams, RBAC, projects, and kanban boards with tasks.
 
-## What exists (Phase 07)
+## What exists (Phase 08)
 
 - **Auth:** `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`
 - **Users:** `GET /users/:id` (self, or anyone sharing an organization with you), `PATCH /users/:id`, `DELETE /users/:id`
@@ -35,6 +35,14 @@ A NestJS + TypeScript backend backed by PostgreSQL via Prisma, with JWT authenti
   - ADMIN and MANAGER can see and manage every project in their organization (`organization:projects:manage-any`)
   - Adding someone requires them to already be an organization member (422 otherwise); a "last lead" safety rail applies here too
   - Removing someone from an organization now also removes their team and project memberships in it
+- **Boards, columns & tasks** (new) — all under `/organizations/:id/projects/:projectId/boards`
+  - `POST/GET /` , `GET/PATCH/DELETE /:boardId` — boards (create with default columns; `GET /:boardId` is the full **board view**: columns → tasks → assignees in one query)
+  - `POST /:boardId/columns`, `PATCH|DELETE /:boardId/columns/:columnId` — columns (add at end or at `position`, rename/move, delete only when empty)
+  - `POST /:boardId/tasks`, `GET|PATCH|DELETE /:boardId/tasks/:taskId`, `POST .../:taskId/move` — tasks (title, description, `priority` LOW/MEDIUM/HIGH/URGENT, `dueDate`, `assigneeId`; move between columns/positions)
+  - Reading needs only access to the project. **Structure** (boards/columns) needs `project:boards:manage` (project LEAD); **content** (tasks) needs `project:tasks:write` (LEAD or MEMBER). Org ADMIN/MANAGER have both.
+  - A task's status is its column; there is no separate status field
+  - Assignees must be project members; leaving a project/organization unassigns your tasks
+  - Archived projects are read-only (409 on every write); each level of the URL is independently ownership-checked
 - `GET /health` — liveness check that also verifies database connectivity
 - Nested resource ownership is independently verified at every level — a team or project ID from one organization can't be accessed through a different organization's URL (a classic IDOR pattern, explicitly guarded against and tested)
 - Malformed IDs in URLs are answered with `404` by the tenant/ownership guards instead of reaching the database
@@ -72,6 +80,7 @@ npm run build
 | `src/common/authorization/organization-permissions.ts` | Organization role → permissions table |
 | `src/common/authorization/team-permissions.ts` | Team role → permissions table |
 | `src/common/authorization/project-permissions.ts` | Project role → permissions table |
+| `src/common/utils/ordering.ts` | Pure helpers that keep column/task `position` dense |
 | `src/common/authorization/require-permission.decorator.ts` | `@RequirePermission(...)` for routes |
 
 ## Trying the teams flow manually
@@ -118,6 +127,28 @@ curl -X POST   http://localhost:3000/organizations/<orgId>/projects/<projectId>/
 curl -X DELETE http://localhost:3000/organizations/<orgId>/projects/<projectId>         -H "Authorization: Bearer <leadToken>"
 ```
 
+## Trying the board flow manually
+
+```bash
+# Continuing from the projects flow: <leadToken>, <orgId>, <projectId>.
+
+# Create a board (comes with To Do / In Progress / Done)
+curl -X POST http://localhost:3000/organizations/<orgId>/projects/<projectId>/boards \
+  -H "Authorization: Bearer <leadToken>" -H "Content-Type: application/json" -d '{"name":"Sprint 1"}'
+
+# Add a task to the first column (use a column id from the response above)
+curl -X POST http://localhost:3000/organizations/<orgId>/projects/<projectId>/boards/<boardId>/tasks \
+  -H "Authorization: Bearer <leadToken>" -H "Content-Type: application/json" \
+  -d '{"columnId":"<todoColumnId>","title":"Write the spec","priority":"HIGH","dueDate":"2026-12-31"}'
+
+# Move it to another column - this is how its status changes
+curl -X POST http://localhost:3000/organizations/<orgId>/projects/<projectId>/boards/<boardId>/tasks/<taskId>/move \
+  -H "Authorization: Bearer <leadToken>" -H "Content-Type: application/json" -d '{"columnId":"<doingColumnId>","position":0}'
+
+# The whole board in one request
+curl http://localhost:3000/organizations/<orgId>/projects/<projectId>/boards/<boardId> -H "Authorization: Bearer <leadToken>"
+```
+
 ## Database
 
 | Command | Purpose |
@@ -130,4 +161,4 @@ curl -X DELETE http://localhost:3000/organizations/<orgId>/projects/<projectId> 
 
 ## Structure
 
-Domain module folders (`boards/`, `tasks/`, `comments/`, `notifications/`, `files/`, `search/`, `activity/`, `audit/`) are still empty placeholders. See [`../docs/folder-structure.md`](../docs/folder-structure.md) and [`../docs/architecture.md`](../docs/architecture.md).
+Domain module folders (`comments/`, `notifications/`, `files/`, `search/`, `activity/`, `audit/`) are still empty placeholders. See [`../docs/folder-structure.md`](../docs/folder-structure.md) and [`../docs/architecture.md`](../docs/architecture.md).

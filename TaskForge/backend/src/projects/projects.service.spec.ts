@@ -40,6 +40,7 @@ describe('ProjectsService', () => {
       count: jest.Mock;
     };
     membership: { findUnique: jest.Mock };
+    task: { updateMany: jest.Mock };
     $transaction: jest.Mock;
   };
   let usersService: { findByEmailSafe: jest.Mock };
@@ -80,6 +81,7 @@ describe('ProjectsService', () => {
         count: jest.fn(),
       },
       membership: { findUnique: jest.fn() },
+      task: { updateMany: jest.fn() },
       $transaction: jest.fn(),
     };
     usersService = { findByEmailSafe: jest.fn() };
@@ -393,6 +395,25 @@ describe('ProjectsService', () => {
       expect(prisma.projectMembership.delete).toHaveBeenCalledWith({
         where: { id: 'pm1' },
       });
+    });
+
+    it("removeMember unassigns the departing member's tasks in that project, in the same transaction", async () => {
+      prisma.projectMembership.findUnique.mockResolvedValue({
+        id: 'pm2',
+        role: ProjectRole.MEMBER,
+      });
+
+      await service.removeMember(projectId, targetUserId);
+
+      expect(prisma.task.updateMany).toHaveBeenCalledWith({
+        where: {
+          assigneeId: targetUserId,
+          column: { board: { projectId } },
+        },
+        data: { assigneeId: null },
+      });
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(prisma.$transaction.mock.calls[0][0]).toHaveLength(2);
     });
 
     it('removeMember removes a plain member without counting leads', async () => {

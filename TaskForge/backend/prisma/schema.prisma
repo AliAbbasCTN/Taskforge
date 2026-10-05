@@ -37,6 +37,7 @@ model User {
   memberships Membership[]
   teamMemberships TeamMembership[]
   projectMemberships ProjectMembership[]
+  assignedTasks      Task[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -199,6 +200,7 @@ model Project {
 
   organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   memberships  ProjectMembership[]
+  boards       Board[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -242,4 +244,89 @@ model ProjectMembership {
   @@index([projectId])
   @@index([userId])
   @@map("project_memberships")
+}
+
+/// A kanban board inside a Project. A project can have several (for example
+/// one per sprint or per workstream). A Board has no organizationId of its
+/// own: tenant ownership flows down through Project -> Organization, and the
+/// request guards verify every link in that chain (see BoardGuard).
+model Board {
+  id        String @id @default(uuid()) @db.Uuid
+  projectId String @map("project_id") @db.Uuid
+  name      String @db.VarChar(150)
+
+  project Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  columns BoardColumn[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([projectId])
+  @@map("boards")
+}
+
+/// A vertical lane on a Board - "To Do", "In Progress", "Done". A task's
+/// STATUS is simply which column it is in: there is deliberately no
+/// separate status field on Task that could disagree with its column.
+///
+/// Named BoardColumn (not Column) to avoid colliding with the SQL/ORM
+/// meaning of the word "column" everywhere it appears in code and docs.
+model BoardColumn {
+  id      String @id @default(uuid()) @db.Uuid
+  boardId String @map("board_id") @db.Uuid
+  name    String @db.VarChar(100)
+
+  /// Zero-based order within the board. Kept dense (0,1,2...) by the
+  /// service, which renumbers inside a transaction whenever a column is
+  /// added, moved or removed. Intentionally NOT unique: a unique constraint
+  /// would make swapping two columns impossible without temporarily
+  /// violating it. See docs/phase-08-concepts.md.
+  position Int
+
+  board Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  tasks Task[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([boardId, position])
+  @@map("board_columns")
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+/// A unit of work, sitting in exactly one column. Moving a task between
+/// columns is how its status changes.
+model Task {
+  id       String @id @default(uuid()) @db.Uuid
+  columnId String @map("column_id") @db.Uuid
+  title    String @db.VarChar(200)
+
+  /// NULL (never "") means no description.
+  description String?      @db.VarChar(5000)
+  priority    TaskPriority @default(MEDIUM)
+  dueDate     DateTime?    @map("due_date")
+
+  /// Must be a member of the task's project - enforced in application code
+  /// (TasksService) and kept true when members leave (tasks are unassigned).
+  /// If the user ACCOUNT is deleted the task survives, unassigned.
+  assigneeId String? @map("assignee_id") @db.Uuid
+
+  /// Zero-based order within the column; same rules as BoardColumn.position.
+  position Int
+
+  column   BoardColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  assignee User?       @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([columnId, position])
+  @@index([assigneeId])
+  @@map("tasks")
 }

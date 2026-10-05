@@ -221,8 +221,8 @@ export class ProjectsService {
    * Permanently deletes a project. Only allowed once it is archived: archive
    * is the undoable step, delete is the point of no return, and forcing the
    * two-step path makes an accidental delete much harder. Cascades to delete
-   * every ProjectMembership (see `onDelete: Cascade` in schema.prisma), and
-   * will cascade to boards and tasks once Phase 08 adds them.
+   * every ProjectMembership, board, column and task under it (see the
+   * `onDelete: Cascade` chain in schema.prisma).
    */
   async remove(projectId: string): Promise<void> {
     const project = await this.getOrThrow(projectId);
@@ -323,9 +323,19 @@ export class ProjectsService {
       await this.assertNotLastLead(projectId);
     }
 
-    await this.prisma.projectMembership.delete({
-      where: { id: membership.id },
-    });
+    // Tasks assigned to someone who is no longer on the project would be
+    // assigned to a person who can't even see them (projects are private),
+    // so leaving the project unassigns them - atomically with the removal.
+    await this.prisma.$transaction([
+      this.prisma.task.updateMany({
+        where: {
+          assigneeId: targetUserId,
+          column: { board: { projectId } },
+        },
+        data: { assigneeId: null },
+      }),
+      this.prisma.projectMembership.delete({ where: { id: membership.id } }),
+    ]);
   }
 
   async updateMemberRole(

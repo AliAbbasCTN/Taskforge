@@ -205,6 +205,15 @@ export class OrganizationsService {
     // would come back to life with their old roles if the person were ever
     // re-added to the organization. See docs/phase-07-concepts.md.
     await this.prisma.$transaction([
+      // Phase 08: tasks they were assigned to, anywhere in this organization,
+      // become unassigned (an assignee must be a project member).
+      this.prisma.task.updateMany({
+        where: {
+          assigneeId: targetUserId,
+          column: { board: { project: { organizationId } } },
+        },
+        data: { assigneeId: null },
+      }),
       this.prisma.teamMembership.deleteMany({
         where: { userId: targetUserId, team: { organizationId } },
       }),

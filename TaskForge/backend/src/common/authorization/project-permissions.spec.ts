@@ -15,6 +15,33 @@ describe('projectRoleHasPermission', () => {
     ).toBe(true);
   });
 
+  it('LEAD can also restructure boards and write tasks', () => {
+    expect(
+      projectRoleHasPermission(
+        ProjectRole.LEAD,
+        Permission.ProjectBoardsManage,
+      ),
+    ).toBe(true);
+    expect(
+      projectRoleHasPermission(ProjectRole.LEAD, Permission.ProjectTasksWrite),
+    ).toBe(true);
+  });
+
+  it('MEMBER can write tasks but not restructure boards', () => {
+    expect(
+      projectRoleHasPermission(
+        ProjectRole.MEMBER,
+        Permission.ProjectTasksWrite,
+      ),
+    ).toBe(true);
+    expect(
+      projectRoleHasPermission(
+        ProjectRole.MEMBER,
+        Permission.ProjectBoardsManage,
+      ),
+    ).toBe(false);
+  });
+
   it('MEMBER has no project management permissions', () => {
     expect(
       projectRoleHasPermission(ProjectRole.MEMBER, Permission.ProjectManage),

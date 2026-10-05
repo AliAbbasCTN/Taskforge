@@ -1,0 +1,93 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../database/prisma.service';
+import { SAFE_USER_SELECT } from '../users/users.service';
+
+/** Every new board starts with a usable workflow; columns can be renamed,
+ * added and (when empty) deleted afterwards. */
+const DEFAULT_COLUMN_NAMES = ['To Do', 'In Progress', 'Done'];
+
+/**
+ * WHAT: Business logic for boards. A board is a container; its columns are
+ * handled by `ColumnsService` and its tasks by `TasksService`.
+ *
+ * WHERE: Injected into `BoardsController`. By the time any method runs,
+ * guards have confirmed the requester may see the project, that the board
+ * belongs to it, and that the requester holds the needed permission.
+ */
+@Injectable()
+export class BoardsService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Creates a board together with its default columns. This is a single
+   * nested `create`, which Prisma executes atomically: the board and its
+   * three columns either all exist or none do, so a board can never be left
+   * without its starting workflow.
+   */
+  create(projectId: string, name: string) {
+    return this.prisma.board.create({
+      data: {
+        projectId,
+        name,
+        columns: {
+          create: DEFAULT_COLUMN_NAMES.map((columnName, position) => ({
+            name: columnName,
+            position,
+          })),
+        },
+      },
+      include: { columns: { orderBy: { position: 'asc' } } },
+    });
+  }
+
+  findAll(projectId: string) {
+    return this.prisma.board.findMany({
+      where: { projectId },
+      include: { _count: { select: { columns: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  /**
+   * The "board view": the board with its columns in order, each column with
+   * its tasks in order, each task with its assignee - in ONE query. Loading
+   * tasks per column, or assignees per task, in a loop would be the N+1
+   * problem. The assignee is selected through `SAFE_USER_SELECT`, so a
+   * password hash is never fetched at all.
+   *
+   * Not paginated yet: a board holds tens of tasks, not thousands. Task
+   * filtering and pagination arrive in Phases 10 and 14.
+   */
+  async findOne(boardId: string) {
+    const board = await this.prisma.board.findUnique({
+      where: { id: boardId },
+      include: {
+        columns: {
+          orderBy: { position: 'asc' },
+          include: {
+            tasks: {
+              orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+              include: { assignee: { select: SAFE_USER_SELECT } },
+            },
+          },
+        },
+      },
+    });
+    if (!board) {
+      throw new NotFoundException('Board not found');
+    }
+    return board;
+  }
+
+  update(boardId: string, name: string) {
+    return this.prisma.board.update({
+      where: { id: boardId },
+      data: { name },
+    });
+  }
+
+  /** Permanent. Cascades to the board's columns and their tasks. */
+  async remove(boardId: string): Promise<void> {
+    await this.prisma.board.delete({ where: { id: boardId } });
+  }
+}

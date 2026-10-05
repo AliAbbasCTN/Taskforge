@@ -47,6 +47,9 @@ describe('TaskForge backend (e2e)', () => {
   });
 
   beforeEach(async () => {
+    await prisma.task.deleteMany();
+    await prisma.boardColumn.deleteMany();
+    await prisma.board.deleteMany();
     await prisma.projectMembership.deleteMany();
     await prisma.project.deleteMany();
     await prisma.teamMembership.deleteMany();
@@ -57,6 +60,9 @@ describe('TaskForge backend (e2e)', () => {
   });
 
   afterAll(async () => {
+    await prisma.task.deleteMany();
+    await prisma.boardColumn.deleteMany();
+    await prisma.board.deleteMany();
     await prisma.projectMembership.deleteMany();
     await prisma.project.deleteMany();
     await prisma.teamMembership.deleteMany();
@@ -1439,9 +1445,7 @@ describe('TaskForge backend (e2e)', () => {
         await post({ name: '     ' }).expect(400); // blank after trimming
         await post({}).expect(400); // missing
         await post({ name: 'x'.repeat(151) }).expect(400); // too long
-        await post({ name: 'Okay', description: 'x'.repeat(2001) }).expect(
-          400,
-        );
+        await post({ name: 'Okay', description: 'x'.repeat(2001) }).expect(400);
         // Unknown properties are rejected, not silently ignored - a client
         // cannot smuggle in e.g. `status` or `organizationId`.
         await post({ name: 'Okay', status: 'ARCHIVED' }).expect(400);
@@ -2156,6 +2160,958 @@ describe('TaskForge backend (e2e)', () => {
           .get(`${projectsUrl(orgB)}/${projectInB}`)
           .set('Authorization', authed(member.accessToken))
           .expect(200);
+      });
+    });
+  });
+
+  describe('Boards, columns & tasks (Phase 08)', () => {
+    const authed = (token: string) => `Bearer ${token}`;
+    const projectsUrl = (orgId: string) => `/organizations/${orgId}/projects`;
+    const boardsUrl = (orgId: string, projectId: string) =>
+      `${projectsUrl(orgId)}/${projectId}/boards`;
+
+    interface ViewTask {
+      id: string;
+      title: string;
+      position: number;
+      assignee: { id: string; email: string } | null;
+    }
+    interface ViewColumn {
+      id: string;
+      name: string;
+      position: number;
+      tasks: ViewTask[];
+    }
+    interface BoardView {
+      id: string;
+      name: string;
+      columns: ViewColumn[];
+    }
+
+    async function registerAndLogin(email: string) {
+      const res = await registerUser({
+        email,
+        name: 'User',
+        password: 'password1',
+      }).expect(201);
+      return {
+        userId: res.body.user.id as string,
+        accessToken: res.body.tokens.accessToken as string,
+      };
+    }
+
+    async function addOrgMember(
+      orgId: string,
+      adminToken: string,
+      email: string,
+    ) {
+      await request(app.getHttpServer())
+        .post(`/organizations/${orgId}/members`)
+        .set('Authorization', authed(adminToken))
+        .send({ email })
+        .expect(201);
+    }
+
+    async function createProject(orgId: string, token: string, name: string) {
+      const res = await request(app.getHttpServer())
+        .post(projectsUrl(orgId))
+        .set('Authorization', authed(token))
+        .send({ name })
+        .expect(201);
+      return res.body.id as string;
+    }
+
+    async function createBoard(
+      orgId: string,
+      projectId: string,
+      token: string,
+      name = 'Sprint 1',
+    ) {
+      const res = await request(app.getHttpServer())
+        .post(boardsUrl(orgId, projectId))
+        .set('Authorization', authed(token))
+        .send({ name })
+        .expect(201);
+      return res.body as {
+        id: string;
+        columns: { id: string; name: string; position: number }[];
+      };
+    }
+
+    async function createTask(
+      orgId: string,
+      projectId: string,
+      boardId: string,
+      token: string,
+      body: object,
+    ) {
+      const res = await request(app.getHttpServer())
+        .post(`${boardsUrl(orgId, projectId)}/${boardId}/tasks`)
+        .set('Authorization', authed(token))
+        .send(body)
+        .expect(201);
+      return res.body as {
+        id: string;
+        position: number;
+        priority: string;
+        assignee: { id: string; email: string } | null;
+        dueDate: string | null;
+      };
+    }
+
+    async function boardView(
+      orgId: string,
+      projectId: string,
+      boardId: string,
+      token: string,
+    ) {
+      const res = await request(app.getHttpServer())
+        .get(`${boardsUrl(orgId, projectId)}/${boardId}`)
+        .set('Authorization', authed(token))
+        .expect(200);
+      return res.body as BoardView;
+    }
+
+    const titles = (column: ViewColumn) => column.tasks.map((t) => t.title);
+
+    /**
+     * Standard cast: an org with an ADMIN (founder, NOT on the project), a
+     * project LEAD (creates the project and board) and a project MEMBER.
+     * The board starts with the default columns To Do / In Progress / Done.
+     */
+    async function setup() {
+      const admin = await registerAndLogin('admin@example.com');
+      const lead = await registerAndLogin('lead@example.com');
+      const member = await registerAndLogin('member@example.com');
+
+      const orgRes = await request(app.getHttpServer())
+        .post('/organizations')
+        .set('Authorization', authed(admin.accessToken))
+        .send({ name: 'Org' })
+        .expect(201);
+      const orgId = orgRes.body.id as string;
+      await addOrgMember(orgId, admin.accessToken, 'lead@example.com');
+      await addOrgMember(orgId, admin.accessToken, 'member@example.com');
+
+      const projectId = await createProject(orgId, lead.accessToken, 'Apollo');
+      await request(app.getHttpServer())
+        .post(`${projectsUrl(orgId)}/${projectId}/members`)
+        .set('Authorization', authed(lead.accessToken))
+        .send({ email: 'member@example.com' })
+        .expect(201);
+
+      const board = await createBoard(orgId, projectId, lead.accessToken);
+      const [todo, doing, done] = board.columns;
+      return {
+        admin,
+        lead,
+        member,
+        orgId,
+        projectId,
+        boardId: board.id,
+        todo,
+        doing,
+        done,
+      };
+    }
+
+    describe('boards', () => {
+      it('creates a board with the default columns, in order', async () => {
+        const { todo, doing, done } = await setup();
+
+        expect([todo, doing, done].map((c) => c.name)).toEqual([
+          'To Do',
+          'In Progress',
+          'Done',
+        ]);
+        expect([todo, doing, done].map((c) => c.position)).toEqual([0, 1, 2]);
+      });
+
+      it('lets a project MEMBER read boards but only a LEAD restructure them', async () => {
+        const { member, orgId, projectId, boardId } = await setup();
+        const auth = authed(member.accessToken);
+        const base = boardsUrl(orgId, projectId);
+
+        await request(app.getHttpServer())
+          .get(base)
+          .set('Authorization', auth)
+          .expect(200)
+          .expect((res: Response) => {
+            expect(res.body).toHaveLength(1);
+            expect(res.body[0]._count.columns).toBe(3);
+          });
+        await request(app.getHttpServer())
+          .get(`${base}/${boardId}`)
+          .set('Authorization', auth)
+          .expect(200);
+
+        // 403 (not 404): they can see the project, they just can't do this.
+        await request(app.getHttpServer())
+          .post(base)
+          .set('Authorization', auth)
+          .send({ name: 'Nope' })
+          .expect(403);
+        await request(app.getHttpServer())
+          .patch(`${base}/${boardId}`)
+          .set('Authorization', auth)
+          .send({ name: 'Renamed' })
+          .expect(403);
+        await request(app.getHttpServer())
+          .delete(`${base}/${boardId}`)
+          .set('Authorization', auth)
+          .expect(403);
+      });
+
+      it('lets an org ADMIN create a board on a project they are not a member of', async () => {
+        const { admin, orgId, projectId } = await setup();
+
+        await request(app.getHttpServer())
+          .post(boardsUrl(orgId, projectId))
+          .set('Authorization', authed(admin.accessToken))
+          .send({ name: 'Admin Board' })
+          .expect(201);
+      });
+
+      it('hides boards entirely from an org member who is not on the project (404)', async () => {
+        const { admin, orgId, projectId, boardId } = await setup();
+        const stranger = await registerAndLogin('stranger@example.com');
+        await addOrgMember(orgId, admin.accessToken, 'stranger@example.com');
+        const auth = authed(stranger.accessToken);
+        const base = boardsUrl(orgId, projectId);
+
+        await request(app.getHttpServer())
+          .get(base)
+          .set('Authorization', auth)
+          .expect(404);
+        await request(app.getHttpServer())
+          .get(`${base}/${boardId}`)
+          .set('Authorization', auth)
+          .expect(404);
+        await request(app.getHttpServer())
+          .post(base)
+          .set('Authorization', auth)
+          .send({ name: 'Sneaky' })
+          .expect(404);
+      });
+
+      it('validates input and requires authentication', async () => {
+        const { lead, orgId, projectId } = await setup();
+        const base = boardsUrl(orgId, projectId);
+        const post = (body: object) =>
+          request(app.getHttpServer())
+            .post(base)
+            .set('Authorization', authed(lead.accessToken))
+            .send(body);
+
+        await post({ name: 'a' }).expect(400);
+        await post({ name: '   ' }).expect(400);
+        await post({ name: 'Okay', projectId: 'x' }).expect(400);
+        await request(app.getHttpServer()).get(base).expect(401);
+      });
+
+      it('renames a board', async () => {
+        const { lead, orgId, projectId, boardId } = await setup();
+
+        const res = await request(app.getHttpServer())
+          .patch(`${boardsUrl(orgId, projectId)}/${boardId}`)
+          .set('Authorization', authed(lead.accessToken))
+          .send({ name: 'Sprint 2' })
+          .expect(200);
+
+        expect(res.body.name).toBe('Sprint 2');
+      });
+
+      it('deletes a board together with its columns and tasks', async () => {
+        const { lead, orgId, projectId, boardId, todo } = await setup();
+        await createTask(orgId, projectId, boardId, lead.accessToken, {
+          columnId: todo.id,
+          title: 'Doomed',
+        });
+
+        await request(app.getHttpServer())
+          .delete(`${boardsUrl(orgId, projectId)}/${boardId}`)
+          .set('Authorization', authed(lead.accessToken))
+          .expect(204);
+
+        expect(await prisma.boardColumn.count({ where: { boardId } })).toBe(0);
+        expect(await prisma.task.count()).toBe(0);
+      });
+
+      it('blocks IDOR: a board from another PROJECT or another ORGANIZATION is a 404 through your URL', async () => {
+        const { admin, lead, orgId, projectId } = await setup();
+
+        // Another project in the SAME org (lead is not on it).
+        const otherProject = await createProject(
+          orgId,
+          admin.accessToken,
+          'Other',
+        );
+        const otherBoard = await createBoard(
+          orgId,
+          otherProject,
+          admin.accessToken,
+        );
+        await request(app.getHttpServer())
+          .get(`${boardsUrl(orgId, projectId)}/${otherBoard.id}`)
+          .set('Authorization', authed(lead.accessToken))
+          .expect(404);
+        await request(app.getHttpServer())
+          .delete(`${boardsUrl(orgId, projectId)}/${otherBoard.id}`)
+          .set('Authorization', authed(admin.accessToken))
+          .expect(404);
+
+        // A project in a DIFFERENT org (admin is ADMIN of both orgs).
+        const orgB = (
+          await request(app.getHttpServer())
+            .post('/organizations')
+            .set('Authorization', authed(admin.accessToken))
+            .send({ name: 'Org B' })
+            .expect(201)
+        ).body.id as string;
+        const projectB = await createProject(
+          orgB,
+          admin.accessToken,
+          'Project B',
+        );
+        const boardB = await createBoard(orgB, projectB, admin.accessToken);
+        await request(app.getHttpServer())
+          .get(`${boardsUrl(orgId, projectId)}/${boardB.id}`)
+          .set('Authorization', authed(admin.accessToken))
+          .expect(404);
+        // Reachable through its own project, so the 404s were about the mismatch.
+        await request(app.getHttpServer())
+          .get(`${boardsUrl(orgB, projectB)}/${boardB.id}`)
+          .set('Authorization', authed(admin.accessToken))
+          .expect(200);
+      });
+
+      it('treats a malformed board ID as not found (404)', async () => {
+        const { lead, orgId, projectId } = await setup();
+
+        await request(app.getHttpServer())
+          .get(`${boardsUrl(orgId, projectId)}/not-a-uuid`)
+          .set('Authorization', authed(lead.accessToken))
+          .expect(404);
+      });
+    });
+
+    describe('columns', () => {
+      it('adds columns at the end or at a position, keeping order dense', async () => {
+        const { lead, orgId, projectId, boardId } = await setup();
+        const colUrl = `${boardsUrl(orgId, projectId)}/${boardId}/columns`;
+        const auth = authed(lead.accessToken);
+
+        const review = await request(app.getHttpServer())
+          .post(colUrl)
+          .set('Authorization', auth)
+          .send({ name: 'Review' })
+          .expect(201);
+        expect(review.body.position).toBe(3);
+
+        await request(app.getHttpServer())
+          .post(colUrl)
+          .set('Authorization', auth)
+          .send({ name: 'Backlog', position: 0 })
+          .expect(201);
+
+        const view = await boardView(
+          orgId,
+          projectId,
+          boardId,
+          lead.accessToken,
+        );
+        expect(view.columns.map((c) => c.name)).toEqual([
+          'Backlog',
+          'To Do',
+          'In Progress',
+          'Done',
+          'Review',
+        ]);
+        expect(view.columns.map((c) => c.position)).toEqual([0, 1, 2, 3, 4]);
+      });
+
+      it('renames and moves a column', async () => {
+        const { lead, orgId, projectId, boardId, done } = await setup();
+
+        await request(app.getHttpServer())
+          .patch(`${boardsUrl(orgId, projectId)}/${boardId}/columns/${done.id}`)
+          .set('Authorization', authed(lead.accessToken))
+          .send({ name: 'Shipped', position: 0 })
+          .expect(200);
+
+        const view = await boardView(
+          orgId,
+          projectId,
+          boardId,
+          lead.accessToken,
+        );
+        expect(view.columns.map((c) => c.name)).toEqual([
+          'Shipped',
+          'To Do',
+          'In Progress',
+        ]);
+        expect(view.columns.map((c) => c.position)).toEqual([0, 1, 2]);
+      });
+
+      it('requires at least one field to update', async () => {
+        const { lead, orgId, projectId, boardId, todo } = await setup();
+
+        await request(app.getHttpServer())
+          .patch(`${boardsUrl(orgId, projectId)}/${boardId}/columns/${todo.id}`)
+          .set('Authorization', authed(lead.accessToken))
+          .send({})
+          .expect(400);
+      });
+
+      it('refuses to delete a column that has tasks, and renumbers after deleting an empty one', async () => {
+        const { lead, orgId, projectId, boardId, todo, doing } = await setup();
+        const colUrl = `${boardsUrl(orgId, projectId)}/${boardId}/columns`;
+        const auth = authed(lead.accessToken);
+        await createTask(orgId, projectId, boardId, lead.accessToken, {
+          columnId: todo.id,
+          title: 'Keeps the column alive',
+        });
+
+        await request(app.getHttpServer())
+          .delete(`${colUrl}/${todo.id}`)
+          .set('Authorization', auth)
+          .expect(409);
+        await request(app.getHttpServer())
+          .delete(`${colUrl}/${doing.id}`)
+          .set('Authorization', auth)
+          .expect(204);
+
+        const view = await boardView(
+          orgId,
+          projectId,
+          boardId,
+          lead.accessToken,
+        );
+        expect(view.columns.map((c) => c.name)).toEqual(['To Do', 'Done']);
+        expect(view.columns.map((c) => c.position)).toEqual([0, 1]);
+      });
+
+      it('forbids a project MEMBER from changing columns', async () => {
+        const { member, orgId, projectId, boardId, todo } = await setup();
+        const colUrl = `${boardsUrl(orgId, projectId)}/${boardId}/columns`;
+        const auth = authed(member.accessToken);
+
+        await request(app.getHttpServer())
+          .post(colUrl)
+          .set('Authorization', auth)
+          .send({ name: 'Nope' })
+          .expect(403);
+        await request(app.getHttpServer())
+          .delete(`${colUrl}/${todo.id}`)
+          .set('Authorization', auth)
+          .expect(403);
+      });
+
+      it("404s for a column that belongs to a different board's URL", async () => {
+        const { lead, orgId, projectId, boardId } = await setup();
+        const second = await createBoard(
+          orgId,
+          projectId,
+          lead.accessToken,
+          'Second',
+        );
+
+        await request(app.getHttpServer())
+          .patch(
+            `${boardsUrl(orgId, projectId)}/${boardId}/columns/${second.columns[0].id}`,
+          )
+          .set('Authorization', authed(lead.accessToken))
+          .send({ name: 'Hijack' })
+          .expect(404);
+      });
+    });
+
+    describe('tasks', () => {
+      it('lets a project MEMBER create tasks, defaulting priority and appending in order', async () => {
+        const { member, orgId, projectId, boardId, todo } = await setup();
+
+        const first = await createTask(
+          orgId,
+          projectId,
+          boardId,
+          member.accessToken,
+          { columnId: todo.id, title: 'First' },
+        );
+        const second = await createTask(
+          orgId,
+          projectId,
+          boardId,
+          member.accessToken,
+          { columnId: todo.id, title: '  Second  ' },
+        );
+
+        expect(first.priority).toBe('MEDIUM');
+        expect(first.assignee).toBeNull();
+        expect([first.position, second.position]).toEqual([0, 1]);
+      });
+
+      it('lets an org ADMIN write tasks on a project they are not a member of', async () => {
+        const { admin, orgId, projectId, boardId, todo } = await setup();
+
+        await createTask(orgId, projectId, boardId, admin.accessToken, {
+          columnId: todo.id,
+          title: 'From the admin',
+        });
+      });
+
+      it('rejects invalid input with 400 and a column from another board with 422', async () => {
+        const { lead, orgId, projectId, boardId, todo } = await setup();
+        const other = await createBoard(
+          orgId,
+          projectId,
+          lead.accessToken,
+          'B2',
+        );
+        const post = (body: object) =>
+          request(app.getHttpServer())
+            .post(`${boardsUrl(orgId, projectId)}/${boardId}/tasks`)
+            .set('Authorization', authed(lead.accessToken))
+            .send(body);
+
+        await post({ columnId: todo.id, title: '' }).expect(400);
+        await post({ columnId: todo.id, title: 'x'.repeat(201) }).expect(400);
+        await post({ columnId: todo.id, title: 'T', priority: 'HUGE' }).expect(
+          400,
+        );
+        await post({
+          columnId: todo.id,
+          title: 'T',
+          dueDate: 'tomorrow',
+        }).expect(400);
+        await post({ title: 'No column' }).expect(400);
+        // Status is the column - there is no status field to smuggle in.
+        await post({ columnId: todo.id, title: 'T', status: 'DONE' }).expect(
+          400,
+        );
+        await post({ columnId: 'not-a-uuid', title: 'T' }).expect(400);
+
+        // Well-formed, but belongs to a different board.
+        await post({ columnId: other.columns[0].id, title: 'T' }).expect(422);
+      });
+
+      it('only lets you assign a task to a member of the project', async () => {
+        const { admin, lead, member, orgId, projectId, boardId, todo } =
+          await setup();
+        const stranger = await registerAndLogin('stranger@example.com');
+        await addOrgMember(orgId, admin.accessToken, 'stranger@example.com');
+        const task = await createTask(
+          orgId,
+          projectId,
+          boardId,
+          lead.accessToken,
+          { columnId: todo.id, title: 'Assign me' },
+        );
+        const url = `${boardsUrl(orgId, projectId)}/${boardId}/tasks/${task.id}`;
+        const patch = (body: object) =>
+          request(app.getHttpServer())
+            .patch(url)
+            .set('Authorization', authed(lead.accessToken))
+            .send(body);
+
+        const assigned = await patch({ assigneeId: member.userId }).expect(200);
+        expect(assigned.body.assignee.email).toBe('member@example.com');
+        expect(assigned.body.assignee).not.toHaveProperty('passwordHash');
+
+        // In the organization, but NOT on this (private) project.
+        await patch({ assigneeId: stranger.userId }).expect(422);
+        // Creating with a non-member assignee is refused too.
+        await request(app.getHttpServer())
+          .post(`${boardsUrl(orgId, projectId)}/${boardId}/tasks`)
+          .set('Authorization', authed(lead.accessToken))
+          .send({
+            columnId: todo.id,
+            title: 'Bad',
+            assigneeId: stranger.userId,
+          })
+          .expect(422);
+
+        const cleared = await patch({ assigneeId: null }).expect(200);
+        expect(cleared.body.assignee).toBeNull();
+      });
+
+      it('edits fields and clears optional ones with null', async () => {
+        const { member, orgId, projectId, boardId, todo } = await setup();
+        const task = await createTask(
+          orgId,
+          projectId,
+          boardId,
+          member.accessToken,
+          { columnId: todo.id, title: 'Old', description: 'Details' },
+        );
+        const url = `${boardsUrl(orgId, projectId)}/${boardId}/tasks/${task.id}`;
+        const patch = (body: object) =>
+          request(app.getHttpServer())
+            .patch(url)
+            .set('Authorization', authed(member.accessToken))
+            .send(body);
+
+        const edited = await patch({
+          title: 'New title',
+          priority: 'URGENT',
+          dueDate: '2026-12-31',
+        }).expect(200);
+        expect(edited.body.title).toBe('New title');
+        expect(edited.body.priority).toBe('URGENT');
+        expect(edited.body.dueDate.startsWith('2026-12-31')).toBe(true);
+        expect(edited.body.description).toBe('Details');
+
+        const cleared = await patch({
+          dueDate: null,
+          description: null,
+        }).expect(200);
+        expect(cleared.body.dueDate).toBeNull();
+        expect(cleared.body.description).toBeNull();
+
+        await patch({}).expect(400);
+      });
+
+      it('reorders a task within its column', async () => {
+        const { lead, orgId, projectId, boardId, todo } = await setup();
+        const make = (title: string) =>
+          createTask(orgId, projectId, boardId, lead.accessToken, {
+            columnId: todo.id,
+            title,
+          });
+        await make('A');
+        await make('B');
+        const c = await make('C');
+
+        await request(app.getHttpServer())
+          .post(`${boardsUrl(orgId, projectId)}/${boardId}/tasks/${c.id}/move`)
+          .set('Authorization', authed(lead.accessToken))
+          .send({ columnId: todo.id, position: 0 })
+          .expect(200);
+
+        const view = await boardView(
+          orgId,
+          projectId,
+          boardId,
+          lead.accessToken,
+        );
+        expect(titles(view.columns[0])).toEqual(['C', 'A', 'B']);
+        expect(view.columns[0].tasks.map((t) => t.position)).toEqual([0, 1, 2]);
+      });
+
+      it('moves a task to another column at a position, keeping BOTH columns dense', async () => {
+        const { lead, orgId, projectId, boardId, todo, doing } = await setup();
+        const make = (columnId: string, title: string) =>
+          createTask(orgId, projectId, boardId, lead.accessToken, {
+            columnId,
+            title,
+          });
+        await make(todo.id, 'A');
+        const b = await make(todo.id, 'B');
+        await make(todo.id, 'C');
+        await make(doing.id, 'D');
+
+        await request(app.getHttpServer())
+          .post(`${boardsUrl(orgId, projectId)}/${boardId}/tasks/${b.id}/move`)
+          .set('Authorization', authed(lead.accessToken))
+          .send({ columnId: doing.id, position: 0 })
+          .expect(200);
+
+        const view = await boardView(
+          orgId,
+          projectId,
+          boardId,
+          lead.accessToken,
+        );
+        expect(titles(view.columns[0])).toEqual(['A', 'C']);
+        expect(view.columns[0].tasks.map((t) => t.position)).toEqual([0, 1]);
+        expect(titles(view.columns[1])).toEqual(['B', 'D']);
+        expect(view.columns[1].tasks.map((t) => t.position)).toEqual([0, 1]);
+      });
+
+      it("refuses to move a task into another board's column (422)", async () => {
+        const { lead, orgId, projectId, boardId, todo } = await setup();
+        const other = await createBoard(
+          orgId,
+          projectId,
+          lead.accessToken,
+          'B2',
+        );
+        const task = await createTask(
+          orgId,
+          projectId,
+          boardId,
+          lead.accessToken,
+          { columnId: todo.id, title: 'Stay put' },
+        );
+
+        await request(app.getHttpServer())
+          .post(
+            `${boardsUrl(orgId, projectId)}/${boardId}/tasks/${task.id}/move`,
+          )
+          .set('Authorization', authed(lead.accessToken))
+          .send({ columnId: other.columns[0].id })
+          .expect(422);
+
+        const view = await boardView(
+          orgId,
+          projectId,
+          boardId,
+          lead.accessToken,
+        );
+        expect(titles(view.columns[0])).toEqual(['Stay put']);
+      });
+
+      it('deletes a task and closes the gap', async () => {
+        const { lead, orgId, projectId, boardId, todo } = await setup();
+        const make = (title: string) =>
+          createTask(orgId, projectId, boardId, lead.accessToken, {
+            columnId: todo.id,
+            title,
+          });
+        const a = await make('A');
+        await make('B');
+        await make('C');
+        const url = `${boardsUrl(orgId, projectId)}/${boardId}/tasks/${a.id}`;
+
+        await request(app.getHttpServer())
+          .delete(url)
+          .set('Authorization', authed(lead.accessToken))
+          .expect(204);
+        await request(app.getHttpServer())
+          .get(url)
+          .set('Authorization', authed(lead.accessToken))
+          .expect(404);
+
+        const view = await boardView(
+          orgId,
+          projectId,
+          boardId,
+          lead.accessToken,
+        );
+        expect(titles(view.columns[0])).toEqual(['B', 'C']);
+        expect(view.columns[0].tasks.map((t) => t.position)).toEqual([0, 1]);
+      });
+
+      it('blocks IDOR: a task from another board is a 404 through this board', async () => {
+        const { lead, orgId, projectId, boardId } = await setup();
+        const other = await createBoard(
+          orgId,
+          projectId,
+          lead.accessToken,
+          'B2',
+        );
+        const foreign = await createTask(
+          orgId,
+          projectId,
+          other.id,
+          lead.accessToken,
+          { columnId: other.columns[0].id, title: 'Foreign' },
+        );
+        const base = `${boardsUrl(orgId, projectId)}/${boardId}/tasks/${foreign.id}`;
+        const auth = authed(lead.accessToken);
+
+        await request(app.getHttpServer())
+          .get(base)
+          .set('Authorization', auth)
+          .expect(404);
+        await request(app.getHttpServer())
+          .patch(base)
+          .set('Authorization', auth)
+          .send({ title: 'Hijack' })
+          .expect(404);
+        await request(app.getHttpServer())
+          .post(`${base}/move`)
+          .set('Authorization', auth)
+          .send({ columnId: other.columns[1].id })
+          .expect(404);
+        await request(app.getHttpServer())
+          .delete(base)
+          .set('Authorization', auth)
+          .expect(404);
+      });
+
+      it('requires authentication', async () => {
+        const { orgId, projectId, boardId, todo } = await setup();
+
+        await request(app.getHttpServer())
+          .post(`${boardsUrl(orgId, projectId)}/${boardId}/tasks`)
+          .send({ columnId: todo.id, title: 'No token' })
+          .expect(401);
+      });
+
+      it('returns the board view with nested columns, tasks and safe assignees', async () => {
+        const { lead, member, orgId, projectId, boardId, doing } =
+          await setup();
+        await createTask(orgId, projectId, boardId, lead.accessToken, {
+          columnId: doing.id,
+          title: 'Assigned',
+          assigneeId: member.userId,
+          priority: 'HIGH',
+        });
+
+        const res = await request(app.getHttpServer())
+          .get(`${boardsUrl(orgId, projectId)}/${boardId}`)
+          .set('Authorization', authed(lead.accessToken))
+          .expect(200);
+
+        expect(res.body.columns).toHaveLength(3);
+        expect(res.body.columns[1].tasks[0].title).toBe('Assigned');
+        expect(res.body.columns[1].tasks[0].assignee.email).toBe(
+          'member@example.com',
+        );
+        expect(JSON.stringify(res.body)).not.toContain('passwordHash');
+      });
+    });
+
+    describe('archived projects', () => {
+      it('make boards, columns and tasks read-only (409) but still readable', async () => {
+        const { lead, orgId, projectId, boardId, todo } = await setup();
+        const auth = authed(lead.accessToken);
+        const task = await createTask(
+          orgId,
+          projectId,
+          boardId,
+          lead.accessToken,
+          { columnId: todo.id, title: 'Existing' },
+        );
+        const base = boardsUrl(orgId, projectId);
+        await request(app.getHttpServer())
+          .post(`${projectsUrl(orgId)}/${projectId}/archive`)
+          .set('Authorization', auth)
+          .expect(200);
+
+        await request(app.getHttpServer())
+          .post(base)
+          .set('Authorization', auth)
+          .send({ name: 'New board' })
+          .expect(409);
+        await request(app.getHttpServer())
+          .post(`${base}/${boardId}/columns`)
+          .set('Authorization', auth)
+          .send({ name: 'New column' })
+          .expect(409);
+        await request(app.getHttpServer())
+          .post(`${base}/${boardId}/tasks`)
+          .set('Authorization', auth)
+          .send({ columnId: todo.id, title: 'New task' })
+          .expect(409);
+        await request(app.getHttpServer())
+          .patch(`${base}/${boardId}/tasks/${task.id}`)
+          .set('Authorization', auth)
+          .send({ title: 'Edited' })
+          .expect(409);
+        await request(app.getHttpServer())
+          .post(`${base}/${boardId}/tasks/${task.id}/move`)
+          .set('Authorization', auth)
+          .send({ columnId: todo.id, position: 0 })
+          .expect(409);
+        await request(app.getHttpServer())
+          .delete(`${base}/${boardId}/tasks/${task.id}`)
+          .set('Authorization', auth)
+          .expect(409);
+
+        // Still readable...
+        const view = await boardView(
+          orgId,
+          projectId,
+          boardId,
+          lead.accessToken,
+        );
+        expect(titles(view.columns[0])).toEqual(['Existing']);
+
+        // ...and writable again once unarchived.
+        await request(app.getHttpServer())
+          .post(`${projectsUrl(orgId)}/${projectId}/unarchive`)
+          .set('Authorization', auth)
+          .expect(200);
+        await createTask(orgId, projectId, boardId, lead.accessToken, {
+          columnId: todo.id,
+          title: 'Back in business',
+        });
+      });
+
+      it('answers 403 before 409 for someone without permission', async () => {
+        const { lead, member, orgId, projectId, boardId } = await setup();
+        await request(app.getHttpServer())
+          .post(`${projectsUrl(orgId)}/${projectId}/archive`)
+          .set('Authorization', authed(lead.accessToken))
+          .expect(200);
+
+        // A MEMBER lacks boards:manage -> 403, not a 409 revealing the state.
+        await request(app.getHttpServer())
+          .post(`${boardsUrl(orgId, projectId)}/${boardId}/columns`)
+          .set('Authorization', authed(member.accessToken))
+          .send({ name: 'X' })
+          .expect(403);
+      });
+    });
+
+    describe('lifecycle and cleanup', () => {
+      it('unassigns tasks when their assignee is removed from the project', async () => {
+        const { lead, member, orgId, projectId, boardId, todo } = await setup();
+        await createTask(orgId, projectId, boardId, lead.accessToken, {
+          columnId: todo.id,
+          title: 'Mine',
+          assigneeId: member.userId,
+        });
+
+        await request(app.getHttpServer())
+          .delete(`${projectsUrl(orgId)}/${projectId}/members/${member.userId}`)
+          .set('Authorization', authed(lead.accessToken))
+          .expect(204);
+
+        const view = await boardView(
+          orgId,
+          projectId,
+          boardId,
+          lead.accessToken,
+        );
+        expect(titles(view.columns[0])).toEqual(['Mine']); // task survives
+        expect(view.columns[0].tasks[0].assignee).toBeNull();
+      });
+
+      it('unassigns tasks when their assignee is removed from the organization', async () => {
+        const { admin, lead, member, orgId, projectId, boardId, todo } =
+          await setup();
+        await createTask(orgId, projectId, boardId, lead.accessToken, {
+          columnId: todo.id,
+          title: 'Mine',
+          assigneeId: member.userId,
+        });
+
+        await request(app.getHttpServer())
+          .delete(`/organizations/${orgId}/members/${member.userId}`)
+          .set('Authorization', authed(admin.accessToken))
+          .expect(204);
+
+        const view = await boardView(
+          orgId,
+          projectId,
+          boardId,
+          lead.accessToken,
+        );
+        expect(view.columns[0].tasks[0].assignee).toBeNull();
+      });
+
+      it('deleting a project cascades to its boards, columns and tasks', async () => {
+        const { lead, orgId, projectId, boardId, todo } = await setup();
+        await createTask(orgId, projectId, boardId, lead.accessToken, {
+          columnId: todo.id,
+          title: 'Doomed',
+        });
+        const auth = authed(lead.accessToken);
+
+        await request(app.getHttpServer())
+          .post(`${projectsUrl(orgId)}/${projectId}/archive`)
+          .set('Authorization', auth)
+          .expect(200);
+        await request(app.getHttpServer())
+          .delete(`${projectsUrl(orgId)}/${projectId}`)
+          .set('Authorization', auth)
+          .expect(204);
+
+        expect(await prisma.board.count()).toBe(0);
+        expect(await prisma.boardColumn.count()).toBe(0);
+        expect(await prisma.task.count()).toBe(0);
       });
     });
   });

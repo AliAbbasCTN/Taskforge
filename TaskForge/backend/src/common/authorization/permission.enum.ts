@@ -40,4 +40,8 @@ export enum Permission {
   // Project-level
   ProjectManage = 'project:manage',
   ProjectMembersManage = 'project:members:manage',
+  /** Change a project's STRUCTURE: create/rename/delete boards and columns. */
+  ProjectBoardsManage = 'project:boards:manage',
+  /** Change a project's CONTENT: create, edit, move, assign, delete tasks. */
+  ProjectTasksWrite = 'project:tasks:write',
 }
