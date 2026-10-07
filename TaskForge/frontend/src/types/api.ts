@@ -81,6 +81,14 @@ export interface BoardSummary {
 
 export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 
+export interface Label {
+  id: string;
+  projectId: string;
+  name: string;
+  /** A "#RRGGBB" colour. */
+  color: string;
+}
+
 export interface Task {
   id: string;
   columnId: string;
@@ -90,7 +98,36 @@ export interface Task {
   dueDate: string | null;
   assigneeId: string | null;
   position: number;
+  createdAt: string;
+  updatedAt: string;
   assignee: User | null;
+  labels: Label[];
+}
+
+/** A task as returned by the paginated list: it also says which column it is in. */
+export interface ListedTask extends Task {
+  column: { id: string; name: string };
+}
+
+/** The envelope every paginated endpoint returns. */
+export interface Paginated<T> {
+  items: T[];
+  /** All matching rows across every page. */
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface Comment {
+  id: string;
+  taskId: string;
+  body: string;
+  createdAt: string;
+  /** null until the comment is edited. */
+  editedAt: string | null;
+  /** null if the author's account was deleted. */
+  author: User | null;
 }
 
 export interface BoardColumn {

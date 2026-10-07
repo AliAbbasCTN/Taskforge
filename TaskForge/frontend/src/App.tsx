@@ -7,6 +7,7 @@ import DashboardPage from './pages/DashboardPage';
 import OrganizationPage from './pages/OrganizationPage';
 import ProjectPage from './pages/ProjectPage';
 import BoardPage from './pages/BoardPage';
+import { TaskDetailPanel } from './components/TaskDetailPanel';
 import NotFoundPage from './pages/NotFoundPage';
 
 /**
@@ -22,6 +23,7 @@ import NotFoundPage from './pages/NotFoundPage';
  *   /orgs/:orgId                      an organization's projects
  *   /orgs/:orgId/projects/:projectId  a project and its boards
  *   /orgs/:orgId/projects/:projectId/boards/:boardId   the kanban board
+ *   .../boards/:boardId/tasks/:taskId  the task panel, opened over the board
  */
 export default function App() {
   return (
@@ -42,7 +44,10 @@ export default function App() {
           <Route
             path="orgs/:orgId/projects/:projectId/boards/:boardId"
             element={<BoardPage />}
-          />
+          >
+            {/* Renders inside BoardPage's <Outlet />, over the board. */}
+            <Route path="tasks/:taskId" element={<TaskDetailPanel />} />
+          </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Route>

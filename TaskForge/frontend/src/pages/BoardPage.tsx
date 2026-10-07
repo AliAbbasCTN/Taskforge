@@ -1,37 +1,73 @@
 import { useState, type FormEvent } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, Outlet, useParams, useSearchParams } from 'react-router-dom';
 import { BoardLane } from '../components/BoardLane';
+import type { BoardOutletContext } from '../components/boardContext';
 import { ErrorBox, FormError, Loading } from '../components/Feedback';
+import { TaskFilterBar } from '../components/TaskFilters';
+import { TaskListView } from '../components/TaskListView';
 import { useBoard, useBoardActions } from '../hooks/useBoards';
+import { useLabels } from '../hooks/useLabels';
 import { useOrganization } from '../hooks/useOrganizations';
-import { useProject } from '../hooks/useProjects';
+import { useProject, useProjectMembers } from '../hooks/useProjects';
+import {
+  filtersFromSearchParams,
+  filtersToSearchParams,
+  hasActiveFilters,
+  type TaskFilters,
+} from '../utils/filters';
 import { canManageProject, canWriteTasks } from '../utils/permissions';
 
 /**
- * WHAT: The kanban board - columns side by side, tasks inside them.
+ * WHAT: The board screen - kanban lanes or a sortable list, with filters, and
+ * the task detail panel opened on top via the nested route.
  *
- * DATA FLOW (worth tracing once): the board comes from ONE request
- * (`GET .../boards/:boardId`) that already contains columns -> tasks ->
- * assignees. When you add or move a task, the mutation succeeds, its
- * `onSuccess` invalidates this board's cache entry, TanStack Query refetches,
- * and React re-renders from the server's answer. The client never edits its
- * own copy of the board, so it can't drift from the truth - including the
- * position numbers the server renumbers on every move.
+ * STATE LIVES IN THE URL: the active filters and the view (`?view=list`) are
+ * query parameters, read here with `useSearchParams`. That makes a filtered
+ * board linkable and bookmarkable, and the back button undoes a filter.
  *
- * The project is fetched too, only to know (a) is it archived (then the
- * whole board is read-only) and (b) what the current user's role is.
+ * DATA FLOW: the board comes from ONE request. Adding a task refetches it;
+ * MOVING a task updates the screen optimistically first (see
+ * `useBoardActions`) and then reconciles with the server.
+ *
+ * WHY drag-and-drop is switched off while a filter is active: a drop position
+ * is an index among ALL the cards in a column, but a filtered lane shows only
+ * some of them. "Drop between the 2nd and 3rd visible card" no longer maps to
+ * a real position, so the board would silently reorder the wrong thing. The
+ * "Move to" menu (bottom of the column) still works.
  */
 export default function BoardPage() {
   const { orgId = '', projectId = '', boardId = '' } = useParams();
-  const board = useBoard(orgId, projectId, boardId);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filters = filtersFromSearchParams(searchParams);
+  const view = searchParams.get('view') === 'list' ? 'list' : 'board';
+  const filtered = hasActiveFilters(filters);
+
+  const board = useBoard(orgId, projectId, boardId, filters);
   const project = useProject(orgId, projectId);
+  const members = useProjectMembers(orgId, projectId);
+  const labels = useLabels(orgId, projectId);
   const { organization } = useOrganization(orgId);
   const { createColumn, createTask, moveTask } = useBoardActions(
     orgId,
     projectId,
     boardId,
+    filters,
   );
   const [columnName, setColumnName] = useState('');
+
+  function setFilters(next: TaskFilters) {
+    setSearchParams(filtersToSearchParams(next, searchParams));
+  }
+
+  function setView(next: 'board' | 'list') {
+    const params = new URLSearchParams(searchParams);
+    if (next === 'list') {
+      params.set('view', 'list');
+    } else {
+      params.delete('view');
+    }
+    setSearchParams(params);
+  }
 
   async function handleAddColumn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -61,6 +97,14 @@ export default function BoardPage() {
   const actionError =
     createTask.error ?? moveTask.error ?? createColumn.error ?? null;
 
+  const outletContext: BoardOutletContext = {
+    columns: columns.map((column) => ({ id: column.id, name: column.name })),
+    canWrite,
+    canModerate: !archived && canManageProject(organization?.role, role),
+    archived,
+    orgRole: organization?.role,
+  };
+
   return (
     <>
       <nav className="breadcrumb" aria-label="Breadcrumb">
@@ -79,46 +123,90 @@ export default function BoardPage() {
           This project is archived, so the board is read-only.
         </p>
       )}
+
+      <div className="toolbar">
+        <div className="segmented" role="group" aria-label="View">
+          {(['board', 'list'] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={view === option}
+              className={view === option ? 'segment is-active' : 'segment'}
+              onClick={() => setView(option)}
+            >
+              {option === 'board' ? 'Board' : 'List'}
+            </button>
+          ))}
+        </div>
+        <TaskFilterBar
+          filters={filters}
+          onChange={setFilters}
+          members={members.data ?? []}
+          labels={labels.data ?? []}
+        />
+      </div>
+
+      {filtered && view === 'board' && canWrite && (
+        <p className="muted">
+          Drag-and-drop is off while filters are on. Use each task's "Move to"
+          menu, or clear the filters.
+        </p>
+      )}
       <FormError error={actionError} />
 
-      <div className="board">
-        {columns.map((column, index) => (
-          <BoardLane
-            key={column.id}
-            column={column}
-            stage={columns.length > 1 ? index / (columns.length - 1) : 0}
-            allColumns={columns}
-            canWrite={canWrite}
-            busy={moveTask.isPending}
-            onAddTask={(columnId, title) =>
-              createTask.mutateAsync({ columnId, title })
-            }
-            onMoveTask={(taskId, columnId) =>
-              moveTask.mutate({ taskId, columnId })
-            }
-          />
-        ))}
-
-        {canManage && (
-          <form onSubmit={handleAddColumn} className="lane lane-new">
-            <label htmlFor="new-column">New column</label>
-            <input
-              id="new-column"
-              required
-              maxLength={100}
-              value={columnName}
-              onChange={(event) => setColumnName(event.target.value)}
+      {view === 'board' ? (
+        <div className="board">
+          {columns.map((column, index) => (
+            <BoardLane
+              key={column.id}
+              column={column}
+              stage={columns.length > 1 ? index / (columns.length - 1) : 0}
+              allColumns={columns}
+              canWrite={canWrite}
+              canDrag={canWrite && !filtered}
+              busy={moveTask.isPending}
+              onAddTask={(columnId, title) =>
+                createTask.mutateAsync({ columnId, title })
+              }
+              onMoveTask={(taskId, columnId, position) =>
+                moveTask.mutate({ taskId, columnId, position })
+              }
             />
-            <button
-              type="submit"
-              className="btn"
-              disabled={createColumn.isPending}
-            >
-              Add column
-            </button>
-          </form>
-        )}
-      </div>
+          ))}
+
+          {canManage && (
+            <form onSubmit={handleAddColumn} className="lane lane-new">
+              <label htmlFor="new-column">New column</label>
+              <input
+                id="new-column"
+                required
+                maxLength={100}
+                value={columnName}
+                onChange={(event) => setColumnName(event.target.value)}
+              />
+              <button
+                type="submit"
+                className="btn"
+                disabled={createColumn.isPending}
+              >
+                Add column
+              </button>
+            </form>
+          )}
+        </div>
+      ) : (
+        <TaskListView
+          // A new filter set starts again at page 1.
+          key={JSON.stringify(filters)}
+          orgId={orgId}
+          projectId={projectId}
+          boardId={boardId}
+          filters={filters}
+        />
+      )}
+
+      {/* The task panel (route `tasks/:taskId`) renders here, over the board. */}
+      <Outlet context={outletContext} />
     </>
   );
 }

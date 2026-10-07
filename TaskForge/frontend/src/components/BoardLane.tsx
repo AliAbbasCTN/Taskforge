@@ -1,5 +1,12 @@
-import { useState, type CSSProperties, type FormEvent } from 'react';
+import {
+  useRef,
+  useState,
+  type CSSProperties,
+  type DragEvent,
+  type FormEvent,
+} from 'react';
 import type { BoardColumn } from '../types/api';
+import { computeDropIndex } from '../utils/dropIndex';
 import { TaskCard } from './TaskCard';
 
 interface BoardLaneProps {
@@ -8,29 +15,38 @@ interface BoardLaneProps {
   stage: number;
   allColumns: BoardColumn[];
   canWrite: boolean;
+  /** Drag-and-drop on? Off while a filter hides some tasks (see BoardPage). */
+  canDrag: boolean;
   busy: boolean;
   onAddTask: (columnId: string, title: string) => Promise<unknown>;
-  onMoveTask: (taskId: string, columnId: string) => void;
+  onMoveTask: (taskId: string, columnId: string, position?: number) => void;
 }
 
 /**
  * WHAT: One column ("lane") of the board: its name, its tasks in the order
- * the server returned them, and a form to add a task.
+ * the server returned them, and a form to add a task. It is also a DROP
+ * TARGET for dragged cards.
  *
- * `stage` colours the lane's top rule along a gradient from slate (start of
- * the workflow) to green (end). The colour carries information - how far along
- * work in this lane is - rather than decorating.
+ * HOW A DROP WORKS: the browser fires `dragover` continuously while a card is
+ * over the lane - we must `preventDefault()` there, or the browser refuses
+ * to allow a drop at all. On `drop` we read the dragged task's id from the
+ * payload, work out the insertion index from where the mouse was released
+ * (`computeDropIndex`), and report it upward. The page then moves the task
+ * optimistically and tells the server.
  */
 export function BoardLane({
   column,
   stage,
   allColumns,
   canWrite,
+  canDrag,
   busy,
   onAddTask,
   onMoveTask,
 }: BoardLaneProps) {
   const [title, setTitle] = useState('');
+  const [dropTarget, setDropTarget] = useState(false);
+  const listRef = useRef<HTMLUListElement>(null);
   const headingId = `lane-${column.id}`;
   const otherColumns = allColumns.filter((c) => c.id !== column.id);
 
@@ -48,11 +64,52 @@ export function BoardLane({
     }
   }
 
+  function handleDragOver(event: DragEvent<HTMLElement>) {
+    if (!canDrag) {
+      return;
+    }
+    event.preventDefault(); // required: this is what makes the lane droppable
+    event.dataTransfer.dropEffect = 'move';
+    setDropTarget(true);
+  }
+
+  function handleDragLeave(event: DragEvent<HTMLElement>) {
+    // `dragleave` also fires when moving onto a child; only clear the highlight
+    // when the pointer really left the lane.
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setDropTarget(false);
+    }
+  }
+
+  function handleDrop(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    setDropTarget(false);
+    const taskId = event.dataTransfer.getData('text/plain');
+    if (!canDrag || !taskId) {
+      return;
+    }
+    const cards = Array.from(
+      listRef.current?.querySelectorAll<HTMLElement>('[data-task-id]') ?? [],
+    );
+    const rects = cards.map((card) => {
+      const box = card.getBoundingClientRect();
+      return {
+        id: card.dataset.taskId ?? '',
+        top: box.top,
+        height: box.height,
+      };
+    });
+    onMoveTask(taskId, column.id, computeDropIndex(rects, event.clientY, taskId));
+  }
+
   return (
     <section
-      className="lane"
+      className={dropTarget ? 'lane is-drop-target' : 'lane'}
       style={{ '--stage': stage } as CSSProperties}
       aria-labelledby={headingId}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
     >
       <header className="lane-header">
         <h2 id={headingId}>{column.name}</h2>
@@ -64,13 +121,14 @@ export function BoardLane({
       {column.tasks.length === 0 ? (
         <p className="lane-empty">Nothing here yet.</p>
       ) : (
-        <ul className="task-list">
+        <ul className="task-list" ref={listRef}>
           {column.tasks.map((task) => (
             <TaskCard
               key={task.id}
               task={task}
               otherColumns={otherColumns}
               canMove={canWrite}
+              canDrag={canDrag}
               disabled={busy}
               onMove={(columnId) => onMoveTask(task.id, columnId)}
             />

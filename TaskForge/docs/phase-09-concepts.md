@@ -84,7 +84,7 @@ Hand-rolling that with `useState` + `useEffect` + `fetch` means re-solving cachi
 - A **query** (`useQuery`) reads data, identified by its `queryKey` — same key, same cache entry.
 - A **mutation** (`useMutation`) changes data. On success we **invalidate** the affected keys, which marks them stale and refetches.
 
-On the board, this means the client **never edits its own copy**. Moving a task calls the API, then refetches the board, and React renders what the server says — including the renumbered positions, which the server computes and the client deliberately does not try to reproduce. The UI can't drift from the truth.
+On the board, the client **never treats its own copy as truth** (Phase 10 adds optimistic updates for moves, which show a *guess* until the server's answer replaces it). Moving a task calls the API, then refetches the board, and React renders what the server says — including the renumbered positions, which the server computes and the client deliberately does not try to reproduce. The UI can't drift from the truth.
 
 It's also why retries are limited: `retry` is off for any `4xx` (a 403 or 404 will give the same answer again; retrying only delays the error message) and on, twice, for network blips and 500s.
 

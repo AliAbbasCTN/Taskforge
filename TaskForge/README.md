@@ -20,8 +20,9 @@ TaskForge is a multi-tenant project management platform inspired by tools like J
 **Phase 07 — Projects** ✅ Complete
 **Phase 08 — Boards, Columns & Tasks** ✅ Complete
 **Phase 09 — React Frontend** ✅ Complete
+**Phase 10 — Advanced Task Management** ✅ Complete
 
-TaskForge now has a **web interface**. Log in or register, switch between your organizations, browse and create projects, and work on a kanban board: add tasks to columns and move them along. It is a React + TypeScript + Vite app (in [`frontend/`](./frontend)) that talks to the backend API from Phases 03-08, with silent session refresh and role-aware controls. Task details, comments and drag-and-drop arrive in Phase 10. See [`docs/phase-09-concepts.md`](./docs/phase-09-concepts.md), [`docs/`](./docs) for architecture, and [Setup](#setup) below to run it.
+TaskForge now has **advanced task management**. Click a task to open its detail panel: edit the title, description, priority, due date, assignee and status, tag it with **labels**, and discuss it in **comments** (edit your own; leads can moderate). The board supports **drag-and-drop** (with an accessible "Move to" menu), **filters** (priority, assignee, label, overdue) that live in the URL, and a **list view** with server-side sorting and pagination. See [`docs/phase-10-concepts.md`](./docs/phase-10-concepts.md), [`docs/`](./docs) for architecture, and [Setup](#setup) below to run it.
 
 ---
 
@@ -86,6 +87,7 @@ See [`docs/folder-structure.md`](./docs/folder-structure.md).
 - [`docs/phase-07-concepts.md`](./docs/phase-07-concepts.md) — concepts learned in Phase 07 (private resources, visibility vs permission, 404 vs 403, archive vs delete, two issues found and fixed)
 - [`docs/phase-08-concepts.md`](./docs/phase-08-concepts.md) — concepts learned in Phase 08 (ordered lists in SQL, status-as-column, structure vs content permissions, five levels of ownership checks)
 - [`docs/phase-09-concepts.md`](./docs/phase-09-concepts.md) — concepts learned in Phase 09 (React components/state/hooks, auth on the frontend, token storage trade-offs, protected routes, server state, why the UI is never the security boundary)
+- [`docs/phase-10-concepts.md`](./docs/phase-10-concepts.md) — concepts learned in Phase 10 (many-to-many, server-side filtering/sorting/pagination, the query-string boolean trap, data-dependent authorization, optimistic updates, native drag-and-drop)
 
 ## Setup
 

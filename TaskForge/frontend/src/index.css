@@ -388,3 +388,99 @@ a.row:hover { background: var(--bg); }
   .auth-form { padding: 2rem 1.5rem; }
   .lane { flex-basis: 15.5rem; }
 }
+
+/* ==========================================================================
+   Phase 10: toolbar & filters, labels, drag-and-drop, task panel, comments,
+   list view.
+   ========================================================================== */
+
+textarea {
+  font: inherit;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.55rem 0.7rem;
+  resize: vertical;
+  width: 100%;
+}
+textarea:focus-visible { outline-offset: 0; border-color: var(--ink); }
+input:disabled, select:disabled, textarea:disabled { background: var(--bg); color: var(--ink-soft); }
+
+.check { display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 500; }
+.check input { width: 1rem; height: 1rem; padding: 0; }
+
+.toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 1rem 1.5rem; margin-top: 1.25rem; }
+.filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.75rem 1rem; }
+.filters .field { min-width: 8.5rem; }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.field-color input { padding: 0.15rem; height: 2.3rem; width: 3.2rem; }
+
+/* ---------- Labels ---------- */
+
+.chips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.chip {
+  --chip: var(--slate);
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+  padding: 0 0.55rem;
+  border-radius: 99px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--chip) 16%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--chip) 55%, var(--surface));
+}
+.label-picker { border: 1px solid var(--line); border-radius: var(--radius); padding: 0.6rem 0.85rem; margin: 0; }
+.label-picker legend { font-weight: 600; font-size: 0.9rem; padding: 0 0.3rem; }
+.label-options { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; }
+
+/* ---------- Drag and drop ---------- */
+
+.task[draggable='true'] { cursor: grab; }
+.task.is-dragging { opacity: 0.4; }
+.lane.is-drop-target { outline: 2px dashed var(--primary); outline-offset: -2px; }
+.task-title { color: var(--ink); text-decoration: none; }
+.task-title:hover { text-decoration: underline; }
+
+/* ---------- Task panel (native <dialog>) ---------- */
+
+.panel-dialog {
+  width: min(38rem, 100vw - 1.5rem);
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  padding: 1.25rem 1.5rem 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lane);
+  background: var(--surface);
+  color: var(--ink);
+}
+.panel-dialog::backdrop { background: rgb(23 32 51 / 0.55); }
+.panel-dialog[open] { display: flex; flex-direction: column; gap: 1rem; }
+.panel-top { display: flex; justify-content: space-between; align-items: center; }
+.panel-form { max-width: none; }
+.danger-zone { border-top: 1px solid var(--line); padding-top: 1rem; }
+
+/* ---------- Comments ---------- */
+
+.comments { display: flex; flex-direction: column; gap: 0.75rem; border-top: 1px solid var(--line); padding-top: 1rem; }
+.comments h3 { font-size: 1rem; }
+.comment-list { display: flex; flex-direction: column; gap: 0.9rem; }
+.comment-head { display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap; font-size: 0.9rem; }
+.comment-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+.comment .actions { gap: 0.9rem; margin-top: 0.2rem; }
+.comment-form { max-width: none; }
+
+/* ---------- List view ---------- */
+
+.table-wrap { overflow-x: auto; margin-top: 1.25rem; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.task-table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+.task-table th, .task-table td { text-align: left; padding: 0.6rem 0.9rem; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.task-table tbody tr:last-child td { border-bottom: 0; }
+.sort-button { font: inherit; font-weight: 600; background: none; border: 0; padding: 0; cursor: pointer; color: var(--ink); }
+.sort-button:hover { text-decoration: underline; }
+.pagination { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 1rem; }
+
+@media (max-width: 800px) {
+  .field-row { grid-template-columns: 1fr; }
+}

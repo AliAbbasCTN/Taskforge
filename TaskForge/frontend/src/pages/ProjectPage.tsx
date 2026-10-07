@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { EmptyState, ErrorBox, FormError, Loading } from '../components/Feedback';
 import { FormField } from '../components/FormField';
+import { LabelManager } from '../components/LabelManager';
 import { useBoards, useCreateBoard } from '../hooks/useBoards';
 import { useOrganization } from '../hooks/useOrganizations';
 import {
@@ -178,6 +179,12 @@ export default function ProjectPage() {
         )}
         <FormError error={createBoard.error} />
       </section>
+
+      <LabelManager
+        orgId={orgId}
+        projectId={projectId}
+        canManage={canManage && !archived}
+      />
 
       <section aria-labelledby="members-heading">
         <h2 id="members-heading">People on this project</h2>

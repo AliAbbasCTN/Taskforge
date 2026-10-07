@@ -2,14 +2,16 @@
 
 The web client for TaskForge: React 19 + TypeScript + Vite.
 
-## What exists (Phase 09)
+## What exists (Phase 10)
 
 - **Authentication:** register, log in, log out. The session survives a page reload, and an expired access token is refreshed silently.
 - **Organizations:** your organizations on the dashboard, create a new one, and switch between them from the sidebar.
 - **Projects:** browse an organization's active or archived projects, create one, archive / unarchive / delete it (project leads and org admins/managers).
 - **Boards:** create boards, see the kanban board with its columns and tasks, add tasks, move a task to another column, add columns. Controls follow your role; archived projects are read-only.
 
-Not built yet: task details and drag-and-drop (Phase 10), real-time updates (Phase 11), member and team management screens, and a frontend linter (CI arrives in Phase 19).
+- **Tasks (Phase 10):** click a task for its detail panel (edit fields, status, labels, comments); drag-and-drop between and within columns (with an accessible "Move to" menu); filters kept in the URL; a Board/List switch where the list is sortable and paginated; project leads manage labels on the project page.
+
+Not built yet: real-time updates (Phase 11), member and team management screens, and a frontend linter (CI arrives in Phase 19).
 
 ## Run it
 
