@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
-import { SAFE_USER_SELECT } from '../users/users.service';
+import { TaskFilterDto } from '../tasks/dto/task-filter.dto';
+import { TASK_INCLUDE, flattenLabels } from '../tasks/task-include';
+import { buildTaskFilterWhere } from '../tasks/task-query';
 
 /** Every new board starts with a usable workflow; columns can be renamed,
  * added and (when empty) deleted afterwards. */
@@ -50,15 +52,18 @@ export class BoardsService {
 
   /**
    * The "board view": the board with its columns in order, each column with
-   * its tasks in order, each task with its assignee - in ONE query. Loading
-   * tasks per column, or assignees per task, in a loop would be the N+1
-   * problem. The assignee is selected through `SAFE_USER_SELECT`, so a
-   * password hash is never fetched at all.
+   * its tasks in order, each task with its assignee and labels - in ONE
+   * query. Loading tasks per column, or assignees/labels per task, in a loop
+   * would be the N+1 problem.
    *
-   * Not paginated yet: a board holds tens of tasks, not thousands. Task
-   * filtering and pagination arrive in Phases 10 and 14.
+   * Optional filters narrow which TASKS appear inside the columns; every
+   * column is still returned (an empty "Done" lane is information too).
+   *
+   * Not paginated: a board holds tens of tasks, and a kanban view must show
+   * whole columns to make sense. The paginated, sortable list lives at
+   * `GET .../tasks`.
    */
-  async findOne(boardId: string) {
+  async findOne(boardId: string, filter: TaskFilterDto = {}) {
     const board = await this.prisma.board.findUnique({
       where: { id: boardId },
       include: {
@@ -66,8 +71,9 @@ export class BoardsService {
           orderBy: { position: 'asc' },
           include: {
             tasks: {
+              where: buildTaskFilterWhere(filter),
               orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
-              include: { assignee: { select: SAFE_USER_SELECT } },
+              include: TASK_INCLUDE,
             },
           },
         },
@@ -76,7 +82,13 @@ export class BoardsService {
     if (!board) {
       throw new NotFoundException('Board not found');
     }
-    return board;
+    return {
+      ...board,
+      columns: board.columns.map((column) => ({
+        ...column,
+        tasks: column.tasks.map((task) => flattenLabels(task)),
+      })),
+    };
   }
 
   update(boardId: string, name: string) {

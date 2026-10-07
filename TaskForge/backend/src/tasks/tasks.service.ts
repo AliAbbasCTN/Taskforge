@@ -11,16 +11,13 @@ import {
   positionChanges,
   reorder,
 } from '../common/utils/ordering';
-import { SAFE_USER_SELECT } from '../users/users.service';
+import { toPaginated, toSkipTake } from '../common/pagination/pagination';
+import { TASK_INCLUDE, TASK_LIST_INCLUDE, flattenLabels } from './task-include';
+import { buildTaskFilterWhere, buildTaskOrderBy } from './task-query';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { MoveTaskDto } from './dto/move-task.dto';
-
-/** Tasks are always returned with their assignee, selected through
- * `SAFE_USER_SELECT` so credentials are never even read from the database. */
-const WITH_ASSIGNEE = {
-  assignee: { select: SAFE_USER_SELECT },
-} satisfies Prisma.TaskInclude;
+import { ListTasksQueryDto } from './dto/list-tasks-query.dto';
 
 /**
  * WHAT: Business logic for tasks - create, edit, assign, move, delete - and
@@ -82,15 +79,50 @@ export class TasksService {
         );
       }
 
-      return tx.task.findUniqueOrThrow({
-        where: { id: task.id },
-        include: WITH_ASSIGNEE,
-      });
+      return flattenLabels(
+        await tx.task.findUniqueOrThrow({
+          where: { id: task.id },
+          include: TASK_INCLUDE,
+        }),
+      );
     });
   }
 
-  findOne(boardId: string, taskId: string) {
-    return this.findScoped(this.prisma, boardId, taskId);
+  async findOne(boardId: string, taskId: string) {
+    return flattenLabels(await this.findScoped(this.prisma, boardId, taskId));
+  }
+
+  /**
+   * The paginated, filterable, sortable task list for one board.
+   *
+   * Ownership is part of the query itself (`column: { boardId }`), so a
+   * client can only ever list tasks of the board the guards already verified.
+   * The total and the page are fetched in ONE transaction so they describe
+   * the same moment - otherwise a task created between the two queries would
+   * make "page 2 of 3" disagree with the rows shown.
+   */
+  async list(boardId: string, query: ListTasksQueryDto) {
+    const where: Prisma.TaskWhereInput = {
+      column: { boardId, ...(query.columnId ? { id: query.columnId } : {}) },
+      ...buildTaskFilterWhere(query),
+    };
+
+    const [total, tasks] = await this.prisma.$transaction([
+      this.prisma.task.count({ where }),
+      this.prisma.task.findMany({
+        where,
+        orderBy: buildTaskOrderBy(query.sortBy, query.sortOrder),
+        ...toSkipTake(query.page, query.pageSize),
+        include: TASK_LIST_INCLUDE,
+      }),
+    ]);
+
+    return toPaginated(
+      tasks.map((task) => flattenLabels(task)),
+      total,
+      query.page,
+      query.pageSize,
+    );
   }
 
   async update(
@@ -127,11 +159,52 @@ export class TasksService {
     }
 
     await this.findScoped(this.prisma, boardId, taskId);
-    return this.prisma.task.update({
-      where: { id: taskId },
-      data,
-      include: WITH_ASSIGNEE,
-    });
+    return flattenLabels(
+      await this.prisma.task.update({
+        where: { id: taskId },
+        data,
+        include: TASK_INCLUDE,
+      }),
+    );
+  }
+
+  /**
+   * Replaces the task's labels with exactly `labelIds`.
+   *
+   * Every label must belong to THIS task's project (the schema can't express
+   * that, so it is checked here): otherwise someone could attach another
+   * project's label - and so learn it exists, and its name - by guessing its
+   * ID. The delete-then-insert pair is one transaction so the task is never
+   * observed half-relabelled.
+   */
+  async setLabels(
+    projectId: string,
+    boardId: string,
+    taskId: string,
+    labelIds: string[],
+  ) {
+    const unique = [...new Set(labelIds)];
+    await this.findScoped(this.prisma, boardId, taskId);
+
+    if (unique.length > 0) {
+      const found = await this.prisma.label.count({
+        where: { id: { in: unique }, projectId },
+      });
+      if (found !== unique.length) {
+        throw new UnprocessableEntityException(
+          'One or more labels do not belong to this project',
+        );
+      }
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.taskLabel.deleteMany({ where: { taskId } }),
+      this.prisma.taskLabel.createMany({
+        data: unique.map((labelId) => ({ taskId, labelId })),
+      }),
+    ]);
+
+    return flattenLabels(await this.findScoped(this.prisma, boardId, taskId));
   }
 
   /**
@@ -189,10 +262,12 @@ export class TasksService {
         );
       }
 
-      return tx.task.findUniqueOrThrow({
-        where: { id: taskId },
-        include: WITH_ASSIGNEE,
-      });
+      return flattenLabels(
+        await tx.task.findUniqueOrThrow({
+          where: { id: taskId },
+          include: TASK_INCLUDE,
+        }),
+      );
     });
   }
 
@@ -256,7 +331,7 @@ export class TasksService {
   ) {
     const task = await client.task.findFirst({
       where: { id: taskId, column: { boardId } },
-      include: WITH_ASSIGNEE,
+      include: TASK_INCLUDE,
     });
     if (!task) {
       throw new NotFoundException('Task not found');

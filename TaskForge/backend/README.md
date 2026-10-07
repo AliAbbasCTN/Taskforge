@@ -1,8 +1,8 @@
 # TaskForge Backend
 
-A NestJS + TypeScript backend backed by PostgreSQL via Prisma, with JWT authentication, multi-tenant organizations, teams, RBAC, projects, and kanban boards with tasks.
+A NestJS + TypeScript backend backed by PostgreSQL via Prisma, with JWT authentication, multi-tenant organizations, teams, RBAC, projects, kanban boards with tasks, labels, comments, and task search/filtering.
 
-## What exists (Phase 08)
+## What exists (Phase 10)
 
 - **Auth:** `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`
 - **Users:** `GET /users/:id` (self, or anyone sharing an organization with you), `PATCH /users/:id`, `DELETE /users/:id`
@@ -43,6 +43,12 @@ A NestJS + TypeScript backend backed by PostgreSQL via Prisma, with JWT authenti
   - A task's status is its column; there is no separate status field
   - Assignees must be project members; leaving a project/organization unassigns your tasks
   - Archived projects are read-only (409 on every write); each level of the URL is independently ownership-checked
+- **Task management** (Phase 10)
+  - `GET .../boards/:boardId/tasks?priority=&assigneeId=&labelId=&overdue=&columnId=&sortBy=&sortOrder=&page=&pageSize=` — paginated, filterable, sortable task list. Returns `{ items, total, page, pageSize, totalPages }`. `pageSize` max 100; `sortBy` is one of `createdAt | dueDate | priority | title` (no-due-date tasks sort last)
+  - `GET .../boards/:boardId?priority=&assigneeId=&labelId=&overdue=` — the board view accepts the same filters (every column is still returned)
+  - `PUT .../tasks/:taskId/labels` `{ "labelIds": [...] }` — replace a task's labels (all must belong to the project)
+  - `GET|POST /organizations/:id/projects/:projectId/labels`, `PATCH|DELETE .../labels/:labelId` — a project's labels (reading: project members; managing: `project:boards:manage`)
+  - `GET|POST .../tasks/:taskId/comments`, `PATCH|DELETE .../comments/:commentId` — comments: anyone with `project:tasks:write` may comment; **only the author may edit**; the author **or a project lead / org admin/manager** may delete
 - `GET /health` — liveness check that also verifies database connectivity
 - Nested resource ownership is independently verified at every level — a team or project ID from one organization can't be accessed through a different organization's URL (a classic IDOR pattern, explicitly guarded against and tested)
 - Malformed IDs in URLs are answered with `404` by the tenant/ownership guards instead of reaching the database
@@ -161,4 +167,4 @@ curl http://localhost:3000/organizations/<orgId>/projects/<projectId>/boards/<bo
 
 ## Structure
 
-Domain module folders (`comments/`, `notifications/`, `files/`, `search/`, `activity/`, `audit/`) are still empty placeholders. See [`../docs/folder-structure.md`](../docs/folder-structure.md) and [`../docs/architecture.md`](../docs/architecture.md).
+Domain module folders (`notifications/`, `files/`, `search/`, `activity/`, `audit/`) are still empty placeholders. See [`../docs/folder-structure.md`](../docs/folder-structure.md) and [`../docs/architecture.md`](../docs/architecture.md).

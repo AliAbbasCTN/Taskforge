@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -22,6 +23,7 @@ import { BoardGuard } from './guards/board.guard';
 import { BoardsService } from './boards.service';
 import { CreateBoardDto } from './dto/create-board.dto';
 import { UpdateBoardDto } from './dto/update-board.dto';
+import { TaskFilterDto } from '../tasks/dto/task-filter.dto';
 
 /**
  * WHAT: HTTP routes for boards, nested under the project they belong to.
@@ -29,7 +31,8 @@ import { UpdateBoardDto } from './dto/update-board.dto';
  * WHERE (prefix `/organizations/:id/projects/:projectId/boards`):
  *   POST   /            - create a board with default columns (project:boards:manage)
  *   GET    /            - list the project's boards (anyone who can see the project)
- *   GET    /:boardId    - the full board view: columns, tasks, assignees (same)
+ *   GET    /:boardId    - the full board view: columns, tasks, assignees, labels;
+ *                         optional task filters ?priority=&assigneeId=&labelId=&overdue= (same)
  *   PATCH  /:boardId    - rename (project:boards:manage)
  *   DELETE /:boardId    - delete, with its columns and tasks (project:boards:manage)
  *
@@ -66,8 +69,11 @@ export class BoardsController {
 
   @Get(':boardId')
   @UseGuards(BoardGuard)
-  findOne(@Param('boardId', ParseUUIDPipe) boardId: string) {
-    return this.boardsService.findOne(boardId);
+  findOne(
+    @Param('boardId', ParseUUIDPipe) boardId: string,
+    @Query() filter: TaskFilterDto,
+  ) {
+    return this.boardsService.findOne(boardId, filter);
   }
 
   @Patch(':boardId')

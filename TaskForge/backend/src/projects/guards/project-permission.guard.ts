@@ -7,8 +7,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { ProjectMembership } from '@prisma/client';
 import { Permission } from '../../common/authorization/permission.enum';
-import { organizationRoleHasPermission } from '../../common/authorization/organization-permissions';
-import { projectRoleHasPermission } from '../../common/authorization/project-permissions';
+import { canActOnProject } from '../../common/authorization/project-access';
 import { PERMISSION_METADATA_KEY } from '../../common/authorization/require-permission.decorator';
 import { RequestMembership } from '../../organizations/decorators/current-membership.decorator';
 
@@ -67,20 +66,10 @@ export class ProjectPermissionGuard implements CanActivate {
       );
     }
 
-    // Path 1: organization-wide oversight (ADMIN or MANAGER).
+    // Organization-wide oversight (ADMIN/MANAGER) or the user's own role on
+    // THIS project - one shared rule, see `canActOnProject`.
     if (
-      organizationRoleHasPermission(
-        orgMembership.role,
-        Permission.OrganizationProjectsManageAny,
-      )
-    ) {
-      return true;
-    }
-
-    // Path 2: the user's own role on THIS project.
-    if (
-      projectMembership &&
-      projectRoleHasPermission(projectMembership.role, required)
+      canActOnProject(orgMembership.role, projectMembership?.role, required)
     ) {
       return true;
     }

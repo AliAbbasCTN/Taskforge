@@ -38,6 +38,7 @@ model User {
   teamMemberships TeamMembership[]
   projectMemberships ProjectMembership[]
   assignedTasks      Task[]
+  comments           Comment[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -103,8 +104,8 @@ model Membership {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  /// A user can only have ONE membership (one role) per organization -
-  /// prevents duplicate/conflicting rows for the same user+org pair.
+  // A user can only have ONE membership (one role) per organization -
+  // prevents duplicate/conflicting rows for the same user+org pair.
   @@unique([userId, organizationId])
   @@index([organizationId])
   @@index([userId])
@@ -201,14 +202,15 @@ model Project {
   organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   memberships  ProjectMembership[]
   boards       Board[]
+  labels       Label[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  /// Serves "list this organization's projects, filtered by status" - the
-  /// main query. Because organizationId is the leading column, this one
-  /// composite index also serves plain "all projects in this org" lookups,
-  /// so a separate single-column organizationId index would be redundant.
+  // Serves "list this organization's projects, filtered by status" - the
+  // main query. Because organizationId is the leading column, this one
+  // composite index also serves plain "all projects in this org" lookups,
+  // so a separate single-column organizationId index would be redundant.
   @@index([organizationId, status])
   @@map("projects")
 }
@@ -322,6 +324,8 @@ model Task {
 
   column   BoardColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
   assignee User?       @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+  labels   TaskLabel[]
+  comments Comment[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -329,4 +333,75 @@ model Task {
   @@index([columnId, position])
   @@index([assigneeId])
   @@map("tasks")
+}
+
+/// A tag that can be attached to tasks, scoped to ONE project: each project
+/// keeps its own vocabulary ("bug", "design", "blocked"), so a label in one
+/// project is invisible in every other. Deleting the project deletes its
+/// labels; deleting a label just detaches it from tasks (via TaskLabel).
+model Label {
+  id        String @id @default(uuid()) @db.Uuid
+  projectId String @map("project_id") @db.Uuid
+  name      String @db.VarChar(50)
+
+  /// A "#RRGGBB" hex colour, validated by the API (CreateLabelDto).
+  color String @db.VarChar(7)
+
+  project Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks   TaskLabel[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // A project can't have two labels with the same name. This is an exact
+  // (case-sensitive) match: "Bug" and "bug" are distinct to the database.
+  @@unique([projectId, name])
+  @@map("labels")
+}
+
+/// The join table for the many-to-many between Task and Label: a task can
+/// have many labels, a label can be on many tasks. The pair is the primary
+/// key, so attaching the same label twice is impossible by construction.
+///
+/// Application code (TasksService.setLabels) additionally guarantees the label
+/// and the task belong to the SAME project - the schema can't express that,
+/// the same way ProjectMembership can't express "user is in the organization".
+model TaskLabel {
+  taskId  String @map("task_id") @db.Uuid
+  labelId String @map("label_id") @db.Uuid
+
+  task  Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  label Label @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, labelId])
+  // "Which tasks have this label?" - the filter query. The primary key
+  // already serves the other direction (task -> its labels).
+  @@index([labelId])
+  @@map("task_labels")
+}
+
+/// A comment on a task. The author is nullable with SetNull: if a user
+/// ACCOUNT is deleted their comments stay (a conversation with half its
+/// messages missing makes no sense) and show as written by a former member.
+model Comment {
+  id       String  @id @default(uuid()) @db.Uuid
+  taskId   String  @map("task_id") @db.Uuid
+  authorId String? @map("author_id") @db.Uuid
+  body     String  @db.VarChar(5000)
+
+  /// Set when the body is edited, so the UI can show "(edited)". NULL means
+  /// never edited. (Not derived from updatedAt, which Prisma also bumps on
+  /// create.)
+  editedAt DateTime? @map("edited_at")
+
+  task   Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // "A task's comments, oldest first" - the only way comments are read.
+  @@index([taskId, createdAt])
+  @@index([authorId])
+  @@map("comments")
 }

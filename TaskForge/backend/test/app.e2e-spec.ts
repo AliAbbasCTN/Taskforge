@@ -47,6 +47,9 @@ describe('TaskForge backend (e2e)', () => {
   });
 
   beforeEach(async () => {
+    await prisma.comment.deleteMany();
+    await prisma.taskLabel.deleteMany();
+    await prisma.label.deleteMany();
     await prisma.task.deleteMany();
     await prisma.boardColumn.deleteMany();
     await prisma.board.deleteMany();
@@ -60,6 +63,9 @@ describe('TaskForge backend (e2e)', () => {
   });
 
   afterAll(async () => {
+    await prisma.comment.deleteMany();
+    await prisma.taskLabel.deleteMany();
+    await prisma.label.deleteMany();
     await prisma.task.deleteMany();
     await prisma.boardColumn.deleteMany();
     await prisma.board.deleteMany();
@@ -3112,6 +3118,894 @@ describe('TaskForge backend (e2e)', () => {
         expect(await prisma.board.count()).toBe(0);
         expect(await prisma.boardColumn.count()).toBe(0);
         expect(await prisma.task.count()).toBe(0);
+      });
+    });
+
+    describe('Phase 10: labels, comments, filtering and pagination', () => {
+      const labelsUrl = (orgId: string, projectId: string) =>
+        `${projectsUrl(orgId)}/${projectId}/labels`;
+      const tasksUrl = (orgId: string, projectId: string, boardId: string) =>
+        `${boardsUrl(orgId, projectId)}/${boardId}/tasks`;
+      const get = (url: string, token: string) =>
+        request(app.getHttpServer())
+          .get(url)
+          .set('Authorization', authed(token));
+
+      async function createLabel(
+        orgId: string,
+        projectId: string,
+        token: string,
+        name: string,
+        color = '#2f4bdb',
+      ) {
+        const res = await request(app.getHttpServer())
+          .post(labelsUrl(orgId, projectId))
+          .set('Authorization', authed(token))
+          .send({ name, color })
+          .expect(201);
+        return res.body as { id: string; name: string; color: string };
+      }
+
+       function setLabels(
+        orgId: string,
+        projectId: string,
+        boardId: string,
+        taskId: string,
+        token: string,
+        labelIds: string[],
+      ) {
+        return request(app.getHttpServer())
+          .put(`${tasksUrl(orgId, projectId, boardId)}/${taskId}/labels`)
+          .set('Authorization', authed(token))
+          .send({ labelIds });
+      }
+
+      describe('labels', () => {
+        it('lets a project LEAD manage labels and a MEMBER only read them', async () => {
+          const { lead, member, orgId, projectId } = await setup();
+          const url = labelsUrl(orgId, projectId);
+
+          const bug = await createLabel(
+            orgId,
+            projectId,
+            lead.accessToken,
+            'Bug',
+            '#d92d20',
+          );
+          expect(bug.color).toBe('#d92d20');
+
+          const renamed = await request(app.getHttpServer())
+            .patch(`${url}/${bug.id}`)
+            .set('Authorization', authed(lead.accessToken))
+            .send({ name: 'Defect' })
+            .expect(200);
+          expect(renamed.body.name).toBe('Defect');
+          expect(renamed.body.color).toBe('#d92d20');
+
+          // A plain project member can see the vocabulary...
+          const list = await get(url, member.accessToken).expect(200);
+          expect(list.body.map((l: { name: string }) => l.name)).toEqual([
+            'Defect',
+          ]);
+          // ...but not change it.
+          await request(app.getHttpServer())
+            .post(url)
+            .set('Authorization', authed(member.accessToken))
+            .send({ name: 'Nope', color: '#000000' })
+            .expect(403);
+          await request(app.getHttpServer())
+            .delete(`${url}/${bug.id}`)
+            .set('Authorization', authed(member.accessToken))
+            .expect(403);
+
+          await request(app.getHttpServer())
+            .delete(`${url}/${bug.id}`)
+            .set('Authorization', authed(lead.accessToken))
+            .expect(204);
+          expect((await get(url, lead.accessToken).expect(200)).body).toEqual(
+            [],
+          );
+        });
+
+        it('validates names and colours, and rejects duplicate names with 409', async () => {
+          const { lead, orgId, projectId } = await setup();
+          const url = labelsUrl(orgId, projectId);
+          const post = (body: object) =>
+            request(app.getHttpServer())
+              .post(url)
+              .set('Authorization', authed(lead.accessToken))
+              .send(body);
+
+          await post({ name: '', color: '#000000' }).expect(400);
+          await post({ name: 'x'.repeat(51), color: '#000000' }).expect(400);
+          await post({ name: 'Bad', color: 'red' }).expect(400);
+          await post({ name: 'Bad', color: '#12345' }).expect(400);
+          await post({ name: 'Bad', color: 'url(javascript:alert(1))' }).expect(
+            400,
+          );
+          await post({ name: 'Bad', color: '#000000', extra: 1 }).expect(400);
+
+          const first = await createLabel(
+            orgId,
+            projectId,
+            lead.accessToken,
+            'Design',
+          );
+          await post({ name: 'Design', color: '#000000' }).expect(409);
+
+          const other = await createLabel(
+            orgId,
+            projectId,
+            lead.accessToken,
+            'Ops',
+          );
+          await request(app.getHttpServer())
+            .patch(`${url}/${other.id}`)
+            .set('Authorization', authed(lead.accessToken))
+            .send({ name: 'Design' })
+            .expect(409);
+          await request(app.getHttpServer())
+            .patch(`${url}/${first.id}`)
+            .set('Authorization', authed(lead.accessToken))
+            .send({})
+            .expect(400);
+        });
+
+        it('hides labels from an org member who is not on the project, and keeps projects separate', async () => {
+          const { admin, lead, orgId, projectId } = await setup();
+          const stranger = await registerAndLogin('stranger@example.com');
+          await addOrgMember(orgId, admin.accessToken, 'stranger@example.com');
+          await get(labelsUrl(orgId, projectId), stranger.accessToken).expect(
+            404,
+          );
+
+          // A label belongs to ONE project: another project's URL can't touch it.
+          const otherProject = await createProject(
+            orgId,
+            admin.accessToken,
+            'Other',
+          );
+          const label = await createLabel(
+            orgId,
+            projectId,
+            lead.accessToken,
+            'Mine',
+          );
+          await request(app.getHttpServer())
+            .patch(`${labelsUrl(orgId, otherProject)}/${label.id}`)
+            .set('Authorization', authed(admin.accessToken))
+            .send({ name: 'Hijack' })
+            .expect(404);
+          await request(app.getHttpServer())
+            .delete(`${labelsUrl(orgId, otherProject)}/${label.id}`)
+            .set('Authorization', authed(admin.accessToken))
+            .expect(404);
+          expect(
+            (
+              await get(
+                labelsUrl(orgId, otherProject),
+                admin.accessToken,
+              ).expect(200)
+            ).body,
+          ).toEqual([]);
+        });
+
+        it('is read-only while the project is archived', async () => {
+          const { lead, orgId, projectId } = await setup();
+          await request(app.getHttpServer())
+            .post(`${projectsUrl(orgId)}/${projectId}/archive`)
+            .set('Authorization', authed(lead.accessToken))
+            .expect(200);
+
+          await request(app.getHttpServer())
+            .post(labelsUrl(orgId, projectId))
+            .set('Authorization', authed(lead.accessToken))
+            .send({ name: 'Late', color: '#000000' })
+            .expect(409);
+          await get(labelsUrl(orgId, projectId), lead.accessToken).expect(200);
+        });
+      });
+
+      describe('labels on tasks', () => {
+        it("lets a project MEMBER set a task's labels, and shows them everywhere a task appears", async () => {
+          const { lead, member, orgId, projectId, boardId, todo } =
+            await setup();
+          const bug = await createLabel(
+            orgId,
+            projectId,
+            lead.accessToken,
+            'Bug',
+            '#d92d20',
+          );
+          const ui = await createLabel(
+            orgId,
+            projectId,
+            lead.accessToken,
+            'UI',
+            '#2f4bdb',
+          );
+          const task = await createTask(
+            orgId,
+            projectId,
+            boardId,
+            lead.accessToken,
+            {
+              columnId: todo.id,
+              title: 'Fix it',
+            },
+          );
+
+          const res = await setLabels(
+            orgId,
+            projectId,
+            boardId,
+            task.id,
+            member.accessToken,
+            [ui.id, bug.id],
+          ).expect(200);
+          // Flattened to plain labels (not join-table rows), ordered by name.
+          expect(res.body.labels).toEqual([
+            expect.objectContaining({
+              id: bug.id,
+              name: 'Bug',
+              color: '#d92d20',
+            }),
+            expect.objectContaining({ id: ui.id, name: 'UI' }),
+          ]);
+
+          const view = await boardView(
+            orgId,
+            projectId,
+            boardId,
+            lead.accessToken,
+          );
+          expect(view.columns[0].tasks[0]).toEqual(
+            expect.objectContaining({
+              labels: [
+                expect.objectContaining({ name: 'Bug' }),
+                expect.objectContaining({ name: 'UI' }),
+              ],
+            }),
+          );
+        });
+
+        it('replaces the whole set, tolerates duplicates, and clears with an empty list', async () => {
+          const { lead, orgId, projectId, boardId, todo } = await setup();
+          const a = await createLabel(orgId, projectId, lead.accessToken, 'A');
+          const b = await createLabel(orgId, projectId, lead.accessToken, 'B');
+          const task = await createTask(
+            orgId,
+            projectId,
+            boardId,
+            lead.accessToken,
+            {
+              columnId: todo.id,
+              title: 'T1',
+            },
+          );
+
+          await setLabels(
+            orgId,
+            projectId,
+            boardId,
+            task.id,
+            lead.accessToken,
+            [a.id, b.id],
+          ).expect(200);
+          const replaced = await setLabels(
+            orgId,
+            projectId,
+            boardId,
+            task.id,
+            lead.accessToken,
+            [b.id, b.id],
+          ).expect(200);
+          expect(
+            replaced.body.labels.map((l: { name: string }) => l.name),
+          ).toEqual(['B']);
+
+          const cleared = await setLabels(
+            orgId,
+            projectId,
+            boardId,
+            task.id,
+            lead.accessToken,
+            [],
+          ).expect(200);
+          expect(cleared.body.labels).toEqual([]);
+        });
+
+        it('rejects a label from ANOTHER project (422) without changing the task', async () => {
+          const { admin, lead, orgId, projectId, boardId, todo } =
+            await setup();
+          const mine = await createLabel(
+            orgId,
+            projectId,
+            lead.accessToken,
+            'Mine',
+          );
+          const otherProject = await createProject(
+            orgId,
+            admin.accessToken,
+            'Other',
+          );
+          const foreign = await createLabel(
+            orgId,
+            otherProject,
+            admin.accessToken,
+            'Foreign',
+          );
+          const task = await createTask(
+            orgId,
+            projectId,
+            boardId,
+            lead.accessToken,
+            {
+              columnId: todo.id,
+              title: 'T1',
+            },
+          );
+          await setLabels(
+            orgId,
+            projectId,
+            boardId,
+            task.id,
+            lead.accessToken,
+            [mine.id],
+          ).expect(200);
+
+          await setLabels(
+            orgId,
+            projectId,
+            boardId,
+            task.id,
+            lead.accessToken,
+            [mine.id, foreign.id],
+          ).expect(422);
+
+          const after = await get(
+            `${tasksUrl(orgId, projectId, boardId)}/${task.id}`,
+            lead.accessToken,
+          ).expect(200);
+          expect(
+            after.body.labels.map((l: { name: string }) => l.name),
+          ).toEqual(['Mine']);
+        });
+
+        it('validates the request body', async () => {
+          const { lead, orgId, projectId, boardId, todo } = await setup();
+          const task = await createTask(
+            orgId,
+            projectId,
+            boardId,
+            lead.accessToken,
+            {
+              columnId: todo.id,
+              title: 'T1',
+            },
+          );
+          const put = (body: object) =>
+            request(app.getHttpServer())
+              .put(`${tasksUrl(orgId, projectId, boardId)}/${task.id}/labels`)
+              .set('Authorization', authed(lead.accessToken))
+              .send(body);
+
+          await put({}).expect(400);
+          await put({ labelIds: 'nope' }).expect(400);
+          await put({ labelIds: ['not-a-uuid'] }).expect(400);
+          await put({
+            labelIds: Array.from(
+              { length: 21 },
+              () => '11111111-1111-4111-8111-111111111111',
+            ),
+          }).expect(400);
+        });
+
+        it('detaches a deleted label from its tasks without deleting the tasks', async () => {
+          const { lead, orgId, projectId, boardId, todo } = await setup();
+          const label = await createLabel(
+            orgId,
+            projectId,
+            lead.accessToken,
+            'Temp',
+          );
+          const task = await createTask(
+            orgId,
+            projectId,
+            boardId,
+            lead.accessToken,
+            {
+              columnId: todo.id,
+              title: 'Survivor',
+            },
+          );
+          await setLabels(
+            orgId,
+            projectId,
+            boardId,
+            task.id,
+            lead.accessToken,
+            [label.id],
+          ).expect(200);
+
+          await request(app.getHttpServer())
+            .delete(`${labelsUrl(orgId, projectId)}/${label.id}`)
+            .set('Authorization', authed(lead.accessToken))
+            .expect(204);
+
+          const after = await get(
+            `${tasksUrl(orgId, projectId, boardId)}/${task.id}`,
+            lead.accessToken,
+          ).expect(200);
+          expect(after.body.title).toBe('Survivor');
+          expect(after.body.labels).toEqual([]);
+          expect(await prisma.taskLabel.count()).toBe(0);
+        });
+      });
+
+      describe('comments', () => {
+        async function taskWithMember() {
+          const ctx = await setup();
+          const task = await createTask(
+            ctx.orgId,
+            ctx.projectId,
+            ctx.boardId,
+            ctx.lead.accessToken,
+            {
+              columnId: ctx.todo.id,
+              title: 'Discuss me',
+            },
+          );
+          const url = `${tasksUrl(ctx.orgId, ctx.projectId, ctx.boardId)}/${task.id}/comments`;
+          return { ...ctx, task, url };
+        }
+        const postComment = (url: string, token: string, body: string) =>
+          request(app.getHttpServer())
+            .post(url)
+            .set('Authorization', authed(token))
+            .send({ body });
+
+        it('lets members comment; comments list oldest first with safe author details', async () => {
+          const { lead, member, url } = await taskWithMember();
+
+          const first = await postComment(
+            url,
+            lead.accessToken,
+            'First',
+          ).expect(201);
+          await postComment(url, member.accessToken, '  Second  ').expect(201);
+
+          expect(first.body.author.email).toBe('lead@example.com');
+          expect(first.body.editedAt).toBeNull();
+
+          const list = await get(url, member.accessToken).expect(200);
+          expect(list.body.map((c: { body: string }) => c.body)).toEqual([
+            'First',
+            'Second',
+          ]);
+          expect(JSON.stringify(list.body)).not.toContain('passwordHash');
+        });
+
+        it('stores comment text verbatim (it is rendered as text, never as HTML)', async () => {
+          const { lead, url } = await taskWithMember();
+
+          const res = await postComment(
+            url,
+            lead.accessToken,
+            '<script>alert(1)</script>',
+          ).expect(201);
+
+          expect(res.body.body).toBe('<script>alert(1)</script>');
+        });
+
+        it('rejects empty, oversized and malformed comments', async () => {
+          const { lead, url } = await taskWithMember();
+
+          await postComment(url, lead.accessToken, '').expect(400);
+          await postComment(url, lead.accessToken, '   ').expect(400);
+          await postComment(url, lead.accessToken, 'x'.repeat(5001)).expect(
+            400,
+          );
+          await request(app.getHttpServer())
+            .post(url)
+            .set('Authorization', authed(lead.accessToken))
+            .send({ body: 'ok', authorId: 'someone-else' })
+            .expect(400);
+          await request(app.getHttpServer())
+            .post(url)
+            .send({ body: 'hi' })
+            .expect(401);
+        });
+
+        it('lets only the AUTHOR edit a comment, and marks it edited', async () => {
+          const { lead, member, url } = await taskWithMember();
+          const comment = await postComment(
+            url,
+            member.accessToken,
+            'Original',
+          ).expect(201);
+          const commentUrl = `${url}/${comment.body.id}`;
+
+          // Not even a project LEAD may put words in someone else's mouth.
+          await request(app.getHttpServer())
+            .patch(commentUrl)
+            .set('Authorization', authed(lead.accessToken))
+            .send({ body: 'Rewritten' })
+            .expect(403);
+
+          const edited = await request(app.getHttpServer())
+            .patch(commentUrl)
+            .set('Authorization', authed(member.accessToken))
+            .send({ body: 'Corrected' })
+            .expect(200);
+          expect(edited.body.body).toBe('Corrected');
+          expect(edited.body.editedAt).toEqual(expect.any(String));
+        });
+
+        it("lets the author delete, a moderator delete anyone's, and nobody else delete", async () => {
+          const { admin, lead, member, orgId, url } = await taskWithMember();
+          const outsider = await registerAndLogin('colleague@example.com');
+          await addOrgMember(orgId, admin.accessToken, 'colleague@example.com');
+          // A second plain project member, who is neither author nor moderator.
+          await request(app.getHttpServer())
+            .post(url.replace(/\/boards\/.*$/, '/members'))
+            .set('Authorization', authed(lead.accessToken))
+            .send({ email: 'colleague@example.com' })
+            .expect(201);
+
+          const own = await postComment(url, member.accessToken, 'Mine').expect(
+            201,
+          );
+          const other = await postComment(
+            url,
+            member.accessToken,
+            'Also mine',
+          ).expect(201);
+          const third = await postComment(
+            url,
+            member.accessToken,
+            'Third',
+          ).expect(201);
+
+          // A different plain member: 403.
+          await request(app.getHttpServer())
+            .delete(`${url}/${own.body.id}`)
+            .set('Authorization', authed(outsider.accessToken))
+            .expect(403);
+          // The author.
+          await request(app.getHttpServer())
+            .delete(`${url}/${own.body.id}`)
+            .set('Authorization', authed(member.accessToken))
+            .expect(204);
+          // A project LEAD (moderator).
+          await request(app.getHttpServer())
+            .delete(`${url}/${other.body.id}`)
+            .set('Authorization', authed(lead.accessToken))
+            .expect(204);
+          // An org ADMIN who is not even on the project (oversight).
+          await request(app.getHttpServer())
+            .delete(`${url}/${third.body.id}`)
+            .set('Authorization', authed(admin.accessToken))
+            .expect(204);
+
+          expect((await get(url, lead.accessToken).expect(200)).body).toEqual(
+            [],
+          );
+        });
+
+        it('hides comments from non-members (404) and from the wrong board (404)', async () => {
+          const { admin, lead, orgId, projectId, task, url } =
+            await taskWithMember();
+          const stranger = await registerAndLogin('stranger@example.com');
+          await addOrgMember(orgId, admin.accessToken, 'stranger@example.com');
+          await postComment(url, lead.accessToken, 'Secret plans').expect(201);
+
+          await get(url, stranger.accessToken).expect(404);
+
+          // The same task ID through ANOTHER board's URL is not reachable.
+          const other = await createBoard(
+            orgId,
+            projectId,
+            lead.accessToken,
+            'B2',
+          );
+          const wrongUrl = `${tasksUrl(orgId, projectId, other.id)}/${task.id}/comments`;
+          await get(wrongUrl, lead.accessToken).expect(404);
+          await postComment(wrongUrl, lead.accessToken, 'Sneaky').expect(404);
+        });
+
+        it('is read-only while the project is archived, and cascades with the task', async () => {
+          const { lead, orgId, projectId, boardId, task, url } =
+            await taskWithMember();
+          await postComment(url, lead.accessToken, 'Before').expect(201);
+          await request(app.getHttpServer())
+            .post(`${projectsUrl(orgId)}/${projectId}/archive`)
+            .set('Authorization', authed(lead.accessToken))
+            .expect(200);
+
+          await postComment(url, lead.accessToken, 'After').expect(409);
+          await get(url, lead.accessToken).expect(200);
+
+          await request(app.getHttpServer())
+            .post(`${projectsUrl(orgId)}/${projectId}/unarchive`)
+            .set('Authorization', authed(lead.accessToken))
+            .expect(200);
+          await request(app.getHttpServer())
+            .delete(`${tasksUrl(orgId, projectId, boardId)}/${task.id}`)
+            .set('Authorization', authed(lead.accessToken))
+            .expect(204);
+          expect(await prisma.comment.count()).toBe(0);
+        });
+      });
+
+      describe('listing tasks: filter, sort, paginate', () => {
+        /**
+         * Five tasks with deliberately varied attributes:
+         *   Alpha   LOW      due 2020-01-01 (overdue)
+         *   Bravo   HIGH     due 2099-01-01              assignee: member   label: Bug
+         *   Charlie URGENT   no due date
+         *   Delta   MEDIUM   due 2020-06-01 (overdue)    assignee: lead
+         *   Echo    HIGH     no due date                                    label: Bug
+         */
+        async function seed() {
+          const ctx = await setup();
+          const { orgId, projectId, boardId, todo, doing, lead, member } = ctx;
+          const bug = await createLabel(
+            orgId,
+            projectId,
+            lead.accessToken,
+            'Bug',
+          );
+          const make = (body: object) =>
+            createTask(orgId, projectId, boardId, lead.accessToken, body);
+
+          await make({
+            columnId: todo.id,
+            title: 'Alpha',
+            priority: 'LOW',
+            dueDate: '2020-01-01',
+          });
+          const bravo = await make({
+            columnId: todo.id,
+            title: 'Bravo',
+            priority: 'HIGH',
+            dueDate: '2099-01-01',
+            assigneeId: member.userId,
+          });
+          await make({
+            columnId: doing.id,
+            title: 'Charlie',
+            priority: 'URGENT',
+          });
+          await make({
+            columnId: doing.id,
+            title: 'Delta',
+            priority: 'MEDIUM',
+            dueDate: '2020-06-01',
+            assigneeId: lead.userId,
+          });
+          const echo = await make({
+            columnId: todo.id,
+            title: 'Echo',
+            priority: 'HIGH',
+          });
+          for (const t of [bravo, echo]) {
+            await setLabels(orgId, projectId, boardId, t.id, lead.accessToken, [
+              bug.id,
+            ]).expect(200);
+          }
+          return { ...ctx, bug, url: tasksUrl(orgId, projectId, boardId) };
+        }
+
+        interface ListedTask {
+          title: string;
+          priority: string;
+          dueDate: string | null;
+          column: { name: string };
+          labels: { name: string }[];
+        }
+        const titlesOf = (body: { items: ListedTask[] }) =>
+          body.items.map((t) => t.title).sort();
+
+        it('returns a paginated envelope with columns and flattened labels', async () => {
+          const { lead, url } = await seed();
+
+          const res = await get(url, lead.accessToken).expect(200);
+
+          expect(res.body).toEqual(
+            expect.objectContaining({
+              total: 5,
+              page: 1,
+              pageSize: 20,
+              totalPages: 1,
+            }),
+          );
+          expect(res.body.items).toHaveLength(5);
+          const bravo = res.body.items.find(
+            (t: ListedTask) => t.title === 'Bravo',
+          );
+          expect(bravo.column.name).toBe('To Do');
+          expect(bravo.labels).toEqual([
+            expect.objectContaining({ name: 'Bug' }),
+          ]);
+        });
+
+        it('filters by priority, assignee, label and column, and combines filters with AND', async () => {
+          const { lead, member, bug, doing, url } = await seed();
+          const list = async (query: string) =>
+            (await get(`${url}?${query}`, lead.accessToken).expect(200)).body;
+
+          expect(titlesOf(await list('priority=HIGH'))).toEqual([
+            'Bravo',
+            'Echo',
+          ]);
+          expect(titlesOf(await list(`assigneeId=${member.userId}`))).toEqual([
+            'Bravo',
+          ]);
+          expect(titlesOf(await list(`labelId=${bug.id}`))).toEqual([
+            'Bravo',
+            'Echo',
+          ]);
+          expect(titlesOf(await list(`columnId=${doing.id}`))).toEqual([
+            'Charlie',
+            'Delta',
+          ]);
+          expect(
+            titlesOf(
+              await list(
+                `priority=HIGH&labelId=${bug.id}&assigneeId=${member.userId}`,
+              ),
+            ),
+          ).toEqual(['Bravo']);
+          expect(
+            titlesOf(await list('priority=LOW&labelId=' + bug.id)),
+          ).toEqual([]);
+        });
+
+        it('treats overdue=true as past-due only and overdue=false as NO filter (not "true")', async () => {
+          const { lead, url } = await seed();
+          const list = async (query: string) =>
+            (await get(`${url}?${query}`, lead.accessToken).expect(200)).body;
+
+          expect(titlesOf(await list('overdue=true'))).toEqual([
+            'Alpha',
+            'Delta',
+          ]);
+          // The classic bug: Boolean("false") === true. This must NOT filter.
+          expect(titlesOf(await list('overdue=false'))).toHaveLength(5);
+        });
+
+        it('sorts by title, priority (by declared order, not alphabetically) and due date (undated last)', async () => {
+          const { lead, url } = await seed();
+          const list = async (query: string) =>
+            (await get(`${url}?${query}`, lead.accessToken).expect(200)).body
+              .items as ListedTask[];
+
+          expect(
+            (await list('sortBy=title&sortOrder=asc')).map((t) => t.title),
+          ).toEqual(['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo']);
+          expect(
+            (await list('sortBy=title&sortOrder=desc')).map((t) => t.title),
+          ).toEqual(['Echo', 'Delta', 'Charlie', 'Bravo', 'Alpha']);
+
+          expect(
+            (await list('sortBy=priority&sortOrder=desc')).map(
+              (t) => t.priority,
+            ),
+          ).toEqual(['URGENT', 'HIGH', 'HIGH', 'MEDIUM', 'LOW']);
+          expect(
+            (await list('sortBy=priority&sortOrder=asc')).map(
+              (t) => t.priority,
+            ),
+          ).toEqual(['LOW', 'MEDIUM', 'HIGH', 'HIGH', 'URGENT']);
+
+          for (const order of ['asc', 'desc']) {
+            const byDue = await list(`sortBy=dueDate&sortOrder=${order}`);
+            // Both undated tasks are last in EITHER direction.
+            expect(byDue.slice(3).every((t) => t.dueDate === null)).toBe(true);
+            expect(byDue.slice(0, 3).every((t) => t.dueDate !== null)).toBe(
+              true,
+            );
+          }
+          expect(
+            (await list('sortBy=dueDate&sortOrder=asc'))
+              .slice(0, 3)
+              .map((t) => t.title),
+          ).toEqual(['Alpha', 'Delta', 'Bravo']);
+        });
+
+        it('pages through results without gaps or repeats, and past the end returns nothing', async () => {
+          const { lead, url } = await seed();
+          const page = async (n: number) =>
+            (
+              await get(
+                `${url}?sortBy=title&sortOrder=asc&pageSize=2&page=${n}`,
+                lead.accessToken,
+              ).expect(200)
+            ).body;
+
+          const [p1, p2, p3, p4] = [
+            await page(1),
+            await page(2),
+            await page(3),
+            await page(4),
+          ];
+
+          expect(p1.items.map((t: ListedTask) => t.title)).toEqual([
+            'Alpha',
+            'Bravo',
+          ]);
+          expect(p2.items.map((t: ListedTask) => t.title)).toEqual([
+            'Charlie',
+            'Delta',
+          ]);
+          expect(p3.items.map((t: ListedTask) => t.title)).toEqual(['Echo']);
+          expect(p1).toEqual(
+            expect.objectContaining({ total: 5, totalPages: 3, pageSize: 2 }),
+          );
+          expect(p4.items).toEqual([]);
+          expect(p4.total).toBe(5);
+        });
+
+        it('rejects invalid query parameters with 400 instead of passing them to the database', async () => {
+          const { lead, url } = await seed();
+          const bad = async (query: string) =>
+            get(`${url}?${query}`, lead.accessToken).expect(400);
+
+          await bad('pageSize=101');
+          await bad('pageSize=0');
+          await bad('page=0');
+          await bad('page=abc');
+          await bad('sortBy=passwordHash');
+          await bad('sortOrder=sideways');
+          await bad('priority=SOON');
+          await bad('assigneeId=not-a-uuid');
+          await bad('labelId=not-a-uuid');
+          await bad('overdue=maybe');
+          await bad('unknown=1');
+        });
+
+        it('never lists tasks from another board, and is hidden from non-members', async () => {
+          const { admin, lead, orgId, projectId, url } = await seed();
+          const other = await createBoard(
+            orgId,
+            projectId,
+            lead.accessToken,
+            'B2',
+          );
+          await createTask(orgId, projectId, other.id, lead.accessToken, {
+            columnId: other.columns[0].id,
+            title: 'On another board',
+          });
+          const stranger = await registerAndLogin('stranger@example.com');
+          await addOrgMember(orgId, admin.accessToken, 'stranger@example.com');
+
+          const res = await get(url, lead.accessToken).expect(200);
+          expect(res.body.total).toBe(5);
+          expect(titlesOf(res.body)).not.toContain('On another board');
+
+          await get(url, stranger.accessToken).expect(404);
+        });
+
+        it('filters the board view too, keeping every column', async () => {
+          const { lead, orgId, projectId, boardId } = await seed();
+          const boardUrl = `${boardsUrl(orgId, projectId)}/${boardId}`;
+
+          const high = (
+            await get(`${boardUrl}?priority=HIGH`, lead.accessToken).expect(200)
+          ).body as BoardView;
+          expect(high.columns).toHaveLength(3);
+          expect(
+            high.columns.flatMap((c) => c.tasks.map((t) => t.title)).sort(),
+          ).toEqual(['Bravo', 'Echo']);
+
+          const all = (
+            await get(`${boardUrl}?overdue=false`, lead.accessToken).expect(200)
+          ).body as BoardView;
+          expect(all.columns.flatMap((c) => c.tasks)).toHaveLength(5);
+
+          await get(`${boardUrl}?priority=SOON`, lead.accessToken).expect(400);
+        });
       });
     });
   });

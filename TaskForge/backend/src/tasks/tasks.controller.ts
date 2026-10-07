@@ -9,6 +9,8 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -23,20 +25,25 @@ import { TasksService } from './tasks.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { MoveTaskDto } from './dto/move-task.dto';
+import { ListTasksQueryDto } from './dto/list-tasks-query.dto';
+import { SetTaskLabelsDto } from './dto/set-task-labels.dto';
 
 /**
  * WHAT: HTTP routes for tasks (project CONTENT, so every write needs
  * `project:tasks:write`, which both project LEADs and MEMBERs hold; org
  * ADMIN/MANAGER have it through organization-wide oversight).
  *
- * There is deliberately no "list tasks" route yet: the board view
- * (`GET .../boards/:boardId`) returns every column with its tasks, in order,
- * in one request. Filtering, search and pagination arrive in Phases 10/14.
+ * Two ways to read tasks: the BOARD VIEW (`GET .../boards/:boardId`) returns
+ * every column with its tasks in order - ideal for the kanban board - while
+ * `GET .../tasks` (below) is a flat, paginated, sortable list for list-style
+ * screens. Full-text search arrives in Phase 14.
  *
  * WHERE (prefix `/organizations/:id/projects/:projectId/boards/:boardId/tasks`):
+ *   GET    /                - paginated list: filter, sort, page
  *   POST   /                - create a task in `columnId`
- *   GET    /:taskId         - one task
+ *   GET    /:taskId         - one task (with assignee and labels)
  *   PATCH  /:taskId         - edit title/description/priority/dueDate/assignee
+ *   PUT    /:taskId/labels  - replace the task's labels
  *   POST   /:taskId/move    - move to another column and/or position
  *   DELETE /:taskId         - delete
  */
@@ -44,6 +51,14 @@ import { MoveTaskDto } from './dto/move-task.dto';
 @UseGuards(JwtAuthGuard, OrganizationMembershipGuard, ProjectGuard, BoardGuard)
 export class TasksController {
   constructor(private readonly tasksService: TasksService) {}
+
+  @Get()
+  list(
+    @Param('boardId', ParseUUIDPipe) boardId: string,
+    @Query() query: ListTasksQueryDto,
+  ) {
+    return this.tasksService.list(boardId, query);
+  }
 
   @Post()
   @RequirePermission(Permission.ProjectTasksWrite)
@@ -74,6 +89,23 @@ export class TasksController {
     @Body() dto: UpdateTaskDto,
   ) {
     return this.tasksService.update(projectId, boardId, taskId, dto);
+  }
+
+  @Put(':taskId/labels')
+  @RequirePermission(Permission.ProjectTasksWrite)
+  @UseGuards(ProjectPermissionGuard, ProjectActiveGuard)
+  setLabels(
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Param('boardId', ParseUUIDPipe) boardId: string,
+    @Param('taskId', ParseUUIDPipe) taskId: string,
+    @Body() dto: SetTaskLabelsDto,
+  ) {
+    return this.tasksService.setLabels(
+      projectId,
+      boardId,
+      taskId,
+      dto.labelIds,
+    );
   }
 
   @Post(':taskId/move')

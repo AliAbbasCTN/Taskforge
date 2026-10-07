@@ -4,6 +4,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
+import { ListTasksQueryDto } from './dto/list-tasks-query.dto';
 import { TasksService } from './tasks.service';
 
 /**
@@ -28,7 +29,14 @@ describe('TasksService', () => {
   let prisma: {
     $transaction: jest.Mock;
     projectMembership: { findUnique: jest.Mock };
-    task: { findFirst: jest.Mock; update: jest.Mock };
+    label: { count: jest.Mock };
+    taskLabel: { deleteMany: jest.Mock; createMany: jest.Mock };
+    task: {
+      findFirst: jest.Mock;
+      update: jest.Mock;
+      count: jest.Mock;
+      findMany: jest.Mock;
+    };
   };
 
   const projectId = 'project-1';
@@ -47,13 +55,26 @@ describe('TasksService', () => {
         create: jest.fn(),
         update: jest.fn(),
         delete: jest.fn(),
-        findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 'result' }),
+        findUniqueOrThrow: jest
+          .fn()
+          .mockResolvedValue({ id: 'result', labels: [] }),
       },
     };
     prisma = {
-      $transaction: jest.fn(async (cb) => cb(tx)),
+      // Supports both forms: `$transaction(async (tx) => ...)` and
+      // `$transaction([query1, query2])`.
+      $transaction: jest.fn(async (arg) =>
+        typeof arg === 'function' ? arg(tx) : Promise.all(arg),
+      ),
       projectMembership: { findUnique: jest.fn() },
-      task: { findFirst: jest.fn(), update: jest.fn() },
+      label: { count: jest.fn() },
+      taskLabel: { deleteMany: jest.fn(), createMany: jest.fn() },
+      task: {
+        findFirst: jest.fn(),
+        update: jest.fn(),
+        count: jest.fn(),
+        findMany: jest.fn(),
+      },
     };
     service = new TasksService(prisma as unknown as PrismaService);
   });
@@ -107,7 +128,7 @@ describe('TasksService', () => {
 
     it('clears assignee, due date and description when given null', async () => {
       prisma.task.findFirst.mockResolvedValue({ id: 'task' });
-      prisma.task.update.mockResolvedValue({ id: 'task' });
+      prisma.task.update.mockResolvedValue({ id: 'task', labels: [] });
 
       await service.update(projectId, boardId, 'task', {
         assigneeId: null,
@@ -230,6 +251,120 @@ describe('TasksService', () => {
         ['t2', 0],
         ['t3', 1],
       ]);
+    });
+  });
+
+  describe('list', () => {
+    const query = (overrides: Partial<ListTasksQueryDto> = {}) =>
+      Object.assign(new ListTasksQueryDto(), overrides);
+
+    beforeEach(() => {
+      prisma.task.count.mockResolvedValue(45);
+      prisma.task.findMany.mockResolvedValue([
+        {
+          id: 't1',
+          labels: [
+            { taskId: 't1', labelId: 'l1', label: { id: 'l1', name: 'Bug' } },
+          ],
+        },
+      ]);
+    });
+
+    it('scopes the query to the board, applies filters, sorting and paging', async () => {
+      await service.list(
+        boardId,
+        query({
+          page: 3,
+          pageSize: 20,
+          sortBy: 'title',
+          sortOrder: 'asc',
+          priority: 'HIGH',
+        }),
+      );
+
+      const args = prisma.task.findMany.mock.calls[0][0];
+      expect(args.where.column).toEqual({ boardId });
+      expect(args.where.priority).toBe('HIGH');
+      expect(args.orderBy).toEqual([{ title: 'asc' }, { id: 'asc' }]);
+      expect(args.skip).toBe(40);
+      expect(args.take).toBe(20);
+      // The count must use the SAME where clause, or totals would lie.
+      expect(prisma.task.count.mock.calls[0][0].where).toEqual(args.where);
+    });
+
+    it('restricts to one column when columnId is given, still within the board', async () => {
+      await service.list(boardId, query({ columnId: 'col-9' }));
+
+      expect(prisma.task.findMany.mock.calls[0][0].where.column).toEqual({
+        boardId,
+        id: 'col-9',
+      });
+    });
+
+    it('returns pagination metadata and flattens the label join rows', async () => {
+      const result = await service.list(boardId, query({ page: 1 }));
+
+      expect(result.total).toBe(45);
+      expect(result.totalPages).toBe(3);
+      expect(result.items[0].labels).toEqual([{ id: 'l1', name: 'Bug' }]);
+    });
+  });
+
+  describe('setLabels', () => {
+    beforeEach(() => {
+      prisma.task.findFirst.mockResolvedValue({ id: 'task', labels: [] });
+    });
+
+    it('rejects a label from another project (422) and changes nothing', async () => {
+      prisma.label.count.mockResolvedValue(1); // asked for 2, only 1 is ours
+
+      await expect(
+        service.setLabels(projectId, boardId, 'task', ['l1', 'foreign']),
+      ).rejects.toThrow(UnprocessableEntityException);
+      expect(prisma.taskLabel.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.taskLabel.createMany).not.toHaveBeenCalled();
+    });
+
+    it('verifies labels against THIS project', async () => {
+      prisma.label.count.mockResolvedValue(1);
+
+      await service.setLabels(projectId, boardId, 'task', ['l1']);
+
+      expect(prisma.label.count).toHaveBeenCalledWith({
+        where: { id: { in: ['l1'] }, projectId },
+      });
+    });
+
+    it('replaces the whole set, ignoring duplicate ids, in one transaction', async () => {
+      prisma.label.count.mockResolvedValue(2);
+
+      await service.setLabels(projectId, boardId, 'task', ['l1', 'l2', 'l1']);
+
+      expect(prisma.taskLabel.deleteMany).toHaveBeenCalledWith({
+        where: { taskId: 'task' },
+      });
+      expect(prisma.taskLabel.createMany).toHaveBeenCalledWith({
+        data: [
+          { taskId: 'task', labelId: 'l1' },
+          { taskId: 'task', labelId: 'l2' },
+        ],
+      });
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('removes every label when given an empty list, without a lookup', async () => {
+      await service.setLabels(projectId, boardId, 'task', []);
+
+      expect(prisma.label.count).not.toHaveBeenCalled();
+      expect(prisma.taskLabel.deleteMany).toHaveBeenCalled();
+    });
+
+    it('404s for a task that is not on this board', async () => {
+      prisma.task.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.setLabels(projectId, boardId, 'nope', ['l1']),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });
