@@ -116,7 +116,7 @@ No state-management library (Redux, Zustand): the only global client state is "w
 ## What's Deferred
 
 - **Task details, comments, labels, drag-and-drop, filtering** — Phase 10. The board already renders priority, due date and assignee; Phase 10 adds editing them.
-- **Real-time updates** — Phase 11. Today another user's change appears when you reload or refetch.
+- **Real-time updates** — done in Phase 11 (see `phase-11-concepts.md`). In this phase another user's change appeared only on reload or refetch.
 - **Member and team management screens** — the backend supports them (Phases 04–07); the UI shows who is on a project but cannot yet add or remove people. Not on the Phase 09 list.
 - **`httpOnly`-cookie refresh tokens** — Phase 20.
 - **Frontend linting and component tests** — ESLint arrives with CI in Phase 19; broader testing is Phase 17. Phase 09 tests the logic most likely to be wrong (token refresh, permission hints, formatting).

@@ -96,8 +96,8 @@ Filters and the Board/List view are likewise **URL query parameters**, preserved
 
 - **Full-text search** and index tuning — Phase 14. (The list endpoint filters by exact fields only.)
 - **Comment pagination** — comments per task are few; revisit if that changes.
-- **Real-time** — another person's comment or move appears on refetch, not instantly. Phase 11.
+- **Real-time** — done in Phase 11. In this phase another person's comment or move appeared only on refetch.
 - **Attachments** — Phase 13.
-- **@mentions, comment notifications** — Phase 11 (notifications).
+- **Comment notifications** — done in Phase 11 (the task's assignee is notified). **@mentions** are still not built.
 - **Case-insensitive label uniqueness** — "Bug" and "bug" are distinct to the database.
 - **Reordering columns by drag** — columns still reorder through the API only.

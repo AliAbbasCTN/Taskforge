@@ -21,8 +21,9 @@ TaskForge is a multi-tenant project management platform inspired by tools like J
 **Phase 08 — Boards, Columns & Tasks** ✅ Complete
 **Phase 09 — React Frontend** ✅ Complete
 **Phase 10 — Advanced Task Management** ✅ Complete
+**Phase 11 — WebSockets** ✅ Complete
 
-TaskForge now has **advanced task management**. Click a task to open its detail panel: edit the title, description, priority, due date, assignee and status, tag it with **labels**, and discuss it in **comments** (edit your own; leads can moderate). The board supports **drag-and-drop** (with an accessible "Move to" menu), **filters** (priority, assignee, label, overdue) that live in the URL, and a **list view** with server-side sorting and pagination. See [`docs/phase-10-concepts.md`](./docs/phase-10-concepts.md), [`docs/`](./docs) for architecture, and [Setup](#setup) below to run it.
+TaskForge is now **real-time**. When a teammate moves a task, comments, or edits a label, your board updates by itself; a bell in the sidebar counts **notifications** (assigned a task, commented on your task, added to a project) that arrive live and wait in an inbox if you were away. Live connections are authenticated, authorized per project, and cut off the moment you lose access. See [`docs/phase-11-concepts.md`](./docs/phase-11-concepts.md), [`docs/`](./docs) for architecture, and [Setup](#setup) below to run it.
 
 ---
 
@@ -88,6 +89,7 @@ See [`docs/folder-structure.md`](./docs/folder-structure.md).
 - [`docs/phase-08-concepts.md`](./docs/phase-08-concepts.md) — concepts learned in Phase 08 (ordered lists in SQL, status-as-column, structure vs content permissions, five levels of ownership checks)
 - [`docs/phase-09-concepts.md`](./docs/phase-09-concepts.md) — concepts learned in Phase 09 (React components/state/hooks, auth on the frontend, token storage trade-offs, protected routes, server state, why the UI is never the security boundary)
 - [`docs/phase-10-concepts.md`](./docs/phase-10-concepts.md) — concepts learned in Phase 10 (many-to-many, server-side filtering/sorting/pagination, the query-string boolean trap, data-dependent authorization, optimistic updates, native drag-and-drop)
+- [`docs/phase-11-concepts.md`](./docs/phase-11-concepts.md) — concepts learned in Phase 11 (WebSockets, rooms, invalidation-based real-time, authorizing long-lived connections, notifications)
 
 ## Setup
 
