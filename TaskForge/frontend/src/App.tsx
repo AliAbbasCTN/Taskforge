@@ -8,6 +8,7 @@ import OrganizationPage from './pages/OrganizationPage';
 import ProjectPage from './pages/ProjectPage';
 import BoardPage from './pages/BoardPage';
 import { TaskDetailPanel } from './components/TaskDetailPanel';
+import NotificationsPage from './pages/NotificationsPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 /**
@@ -20,6 +21,7 @@ import NotFoundPage from './pages/NotFoundPage';
  *
  *   /login, /register                 public (logged-out users only)
  *   /                                 dashboard: your organizations
+ *   /notifications                    your notification inbox
  *   /orgs/:orgId                      an organization's projects
  *   /orgs/:orgId/projects/:projectId  a project and its boards
  *   /orgs/:orgId/projects/:projectId/boards/:boardId   the kanban board
@@ -36,6 +38,7 @@ export default function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
           <Route index element={<DashboardPage />} />
+          <Route path="notifications" element={<NotificationsPage />} />
           <Route path="orgs/:orgId" element={<OrganizationPage />} />
           <Route
             path="orgs/:orgId/projects/:projectId"

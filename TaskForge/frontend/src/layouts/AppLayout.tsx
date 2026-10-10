@@ -1,7 +1,10 @@
 import { type ChangeEvent } from 'react';
 import { Link, NavLink, Outlet, useMatch, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { ConnectionStatus } from '../components/ConnectionStatus';
 import { useOrganizations } from '../hooks/useOrganizations';
+import { useUnreadCount } from '../hooks/useNotifications';
+import { useRealtimeConnection } from '../hooks/useRealtime';
 import { initialOf } from '../utils/format';
 
 /**
@@ -20,7 +23,11 @@ export function AppLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const organizations = useOrganizations();
+  const unread = useUnreadCount();
   const orgMatch = useMatch('/orgs/:orgId/*');
+
+  // Open the live connection for as long as this layout (and so the login) exists.
+  useRealtimeConnection();
   const currentOrgId = orgMatch?.params.orgId ?? '';
 
   function handleOrgChange(event: ChangeEvent<HTMLSelectElement>) {
@@ -63,7 +70,20 @@ export function AppLayout() {
           <NavLink to="/" end>
             Dashboard
           </NavLink>
+          <NavLink to="/notifications">
+            Notifications
+            {!!unread.data?.count && (
+              <span
+                className="nav-badge"
+                aria-label={`${unread.data.count} unread`}
+              >
+                {unread.data.count > 99 ? '99+' : unread.data.count}
+              </span>
+            )}
+          </NavLink>
         </nav>
+
+        <ConnectionStatus />
 
         <div className="sidebar-user">
           <span className="avatar" aria-hidden="true">

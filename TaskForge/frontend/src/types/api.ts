@@ -153,3 +153,50 @@ export interface ApiErrorBody {
   message: string | string[];
   error?: string;
 }
+
+export type NotificationType =
+  | 'TASK_ASSIGNED'
+  | 'COMMENT_ADDED'
+  | 'ADDED_TO_PROJECT';
+
+/**
+ * One item in the user's notification inbox. (Named `AppNotification` because
+ * `Notification` is already a browser global - the desktop-notification API.)
+ */
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  /** The finished sentence, e.g. 'Ada assigned you "Fix login"'. */
+  message: string;
+  projectId: string;
+  boardId: string | null;
+  taskId: string | null;
+  /** null = unread. */
+  readAt: string | null;
+  createdAt: string;
+  actor: User | null;
+  project: { id: string; name: string; organizationId: string };
+}
+
+export type ChangeResource =
+  | 'project'
+  | 'boards'
+  | 'columns'
+  | 'tasks'
+  | 'labels'
+  | 'comments';
+
+/**
+ * The payload of the server's `project:changed` socket event. It carries IDS
+ * ONLY - never titles or content. It means "this changed, go and look"; the
+ * client then re-reads the data over the normal authenticated HTTP API.
+ */
+export interface ProjectChangedEvent {
+  resource: ChangeResource;
+  projectId: string;
+  boardId?: string;
+  taskId?: string;
+  /** Who made the change. */
+  actorId?: string;
+  at: string;
+}

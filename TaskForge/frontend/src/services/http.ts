@@ -1,7 +1,8 @@
 import type { ApiErrorBody, AuthTokens } from '../types/api';
 import { tokenStore } from './tokenStore';
 
-const API_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000').replace(
+/** Base URL of the backend. Shared with the realtime client (same server). */
+export const API_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000').replace(
   /\/+$/,
   '',
 );
@@ -23,7 +24,7 @@ export class ApiError extends Error {
 }
 
 interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   /** Skip the Authorization header and the refresh-on-401 behaviour. Used by
    * login/register/refresh themselves, where a 401 means "wrong credentials",

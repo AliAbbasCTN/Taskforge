@@ -7,6 +7,7 @@ import { TaskFilterBar } from '../components/TaskFilters';
 import { TaskListView } from '../components/TaskListView';
 import { useBoard, useBoardActions } from '../hooks/useBoards';
 import { useLabels } from '../hooks/useLabels';
+import { useProjectRealtime } from '../hooks/useRealtime';
 import { useOrganization } from '../hooks/useOrganizations';
 import { useProject, useProjectMembers } from '../hooks/useProjects';
 import {
@@ -41,6 +42,9 @@ export default function BoardPage() {
   const filters = filtersFromSearchParams(searchParams);
   const view = searchParams.get('view') === 'list' ? 'list' : 'board';
   const filtered = hasActiveFilters(filters);
+
+  // Join the project's live room: other people's changes refetch this board.
+  useProjectRealtime(projectId);
 
   const board = useBoard(orgId, projectId, boardId, filters);
   const project = useProject(orgId, projectId);

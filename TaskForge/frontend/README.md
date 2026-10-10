@@ -2,7 +2,7 @@
 
 The web client for TaskForge: React 19 + TypeScript + Vite.
 
-## What exists (Phase 10)
+## What exists (Phase 11)
 
 - **Authentication:** register, log in, log out. The session survives a page reload, and an expired access token is refreshed silently.
 - **Organizations:** your organizations on the dashboard, create a new one, and switch between them from the sidebar.
@@ -11,7 +11,9 @@ The web client for TaskForge: React 19 + TypeScript + Vite.
 
 - **Tasks (Phase 10):** click a task for its detail panel (edit fields, status, labels, comments); drag-and-drop between and within columns (with an accessible "Move to" menu); filters kept in the URL; a Board/List switch where the list is sortable and paginated; project leads manage labels on the project page.
 
-Not built yet: real-time updates (Phase 11), member and team management screens, and a frontend linter (CI arrives in Phase 19).
+- **Real-time (Phase 11):** boards, tasks and comments update by themselves when teammates make changes; a **Live / Connecting / Offline** indicator shows the connection; a **notification bell** with an unread badge and an inbox page (`/notifications`).
+
+Not built yet: member and team management screens, and a frontend linter (CI arrives in Phase 19).
 
 ## Run it
 

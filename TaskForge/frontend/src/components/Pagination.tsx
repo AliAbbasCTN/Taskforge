@@ -2,6 +2,8 @@ interface PaginationProps {
   page: number;
   totalPages: number;
   total: number;
+  /** What is being counted, singular. Defaults to "task". */
+  itemLabel?: string;
   onPageChange: (page: number) => void;
 }
 
@@ -10,6 +12,7 @@ export function Pagination({
   page,
   totalPages,
   total,
+  itemLabel = 'task',
   onPageChange,
 }: PaginationProps) {
   return (
@@ -24,7 +27,7 @@ export function Pagination({
       </button>
       <span aria-live="polite">
         Page {page} of {totalPages}{' '}
-        <span className="muted">({total} {total === 1 ? 'task' : 'tasks'})</span>
+        <span className="muted">({total} {total === 1 ? itemLabel : `${itemLabel}s`})</span>
       </span>
       <button
         type="button"

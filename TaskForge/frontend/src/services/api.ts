@@ -1,5 +1,6 @@
 import { apiRequest } from './http';
 import type {
+  AppNotification,
   AuthResponse,
   BoardSummary,
   BoardView,
@@ -292,4 +293,30 @@ export const commentApi = {
       `${commentsPath(orgId, projectId, boardId, taskId)}/${commentId}`,
       { method: 'DELETE' },
     ),
+};
+
+export const notificationApi = {
+  list: (params: { page: number; pageSize: number; unreadOnly: boolean }) => {
+    const query = new URLSearchParams({
+      page: String(params.page),
+      pageSize: String(params.pageSize),
+    });
+    if (params.unreadOnly) {
+      query.set('unread', 'true');
+    }
+    return apiRequest<Paginated<AppNotification>>(
+      `/notifications?${query.toString()}`,
+    );
+  },
+
+  unreadCount: () =>
+    apiRequest<{ count: number }>('/notifications/unread-count'),
+
+  markRead: (id: string) =>
+    apiRequest<AppNotification>(`/notifications/${id}/read`, { method: 'POST' }),
+
+  markAllRead: () =>
+    apiRequest<{ updated: number }>('/notifications/read-all', {
+      method: 'POST',
+    }),
 };

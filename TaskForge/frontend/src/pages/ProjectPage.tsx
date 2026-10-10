@@ -5,6 +5,7 @@ import { FormField } from '../components/FormField';
 import { LabelManager } from '../components/LabelManager';
 import { useBoards, useCreateBoard } from '../hooks/useBoards';
 import { useOrganization } from '../hooks/useOrganizations';
+import { useProjectRealtime } from '../hooks/useRealtime';
 import {
   useProject,
   useProjectActions,
@@ -23,6 +24,7 @@ import { canManageProject } from '../utils/permissions';
 export default function ProjectPage() {
   const { orgId = '', projectId = '' } = useParams();
   const navigate = useNavigate();
+  useProjectRealtime(projectId);
   const { organization } = useOrganization(orgId);
   const project = useProject(orgId, projectId);
   const boards = useBoards(orgId, projectId);

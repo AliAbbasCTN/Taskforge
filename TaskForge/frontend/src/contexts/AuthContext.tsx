@@ -10,6 +10,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { authApi } from '../services/api';
 import { refreshTokens, setAuthFailureHandler } from '../services/http';
+import { disconnectRealtime } from '../services/realtime';
 import { tokenStore } from '../services/tokenStore';
 import type { User } from '../types/api';
 
@@ -116,6 +117,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(async () => {
+    // Close the socket ourselves first. Otherwise the server's own close (it
+    // drops a user's sockets on logout) would look like an expired token and
+    // the client would try to "recover" a connection it was told to end.
+    disconnectRealtime();
     try {
       await authApi.logout();
     } catch {
