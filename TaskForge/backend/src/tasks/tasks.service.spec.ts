@@ -3,7 +3,9 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { NotificationType } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { ListTasksQueryDto } from './dto/list-tasks-query.dto';
 import { TasksService } from './tasks.service';
 
@@ -15,6 +17,7 @@ import { TasksService } from './tasks.service';
  */
 describe('TasksService', () => {
   let service: TasksService;
+  let notifications: { notify: jest.Mock };
   let tx: {
     boardColumn: { findFirst: jest.Mock };
     task: {
@@ -42,6 +45,7 @@ describe('TasksService', () => {
   const projectId = 'project-1';
   const boardId = 'board-1';
   const userId = 'user-1';
+  const actorId = 'actor-1';
 
   const updatesOf = (mock: jest.Mock) =>
     mock.mock.calls.map((c) => [c[0].where.id, c[0].data.position]);
@@ -76,7 +80,11 @@ describe('TasksService', () => {
         findMany: jest.fn(),
       },
     };
-    service = new TasksService(prisma as unknown as PrismaService);
+    notifications = { notify: jest.fn() };
+    service = new TasksService(
+      prisma as unknown as PrismaService,
+      notifications as unknown as NotificationsService,
+    );
   });
 
   describe('create', () => {
@@ -84,11 +92,12 @@ describe('TasksService', () => {
       prisma.projectMembership.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.create(projectId, boardId, {
-          columnId: 'col',
-          title: 'Do it',
-          assigneeId: userId,
-        }),
+        service.create(
+          projectId,
+          boardId,
+          { columnId: 'col', title: 'Do it', assigneeId: userId },
+          actorId,
+        ),
       ).rejects.toThrow(UnprocessableEntityException);
       expect(tx.task.create).not.toHaveBeenCalled();
     });
@@ -97,7 +106,12 @@ describe('TasksService', () => {
       tx.boardColumn.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.create(projectId, boardId, { columnId: 'x', title: 'Do it' }),
+        service.create(
+          projectId,
+          boardId,
+          { columnId: 'x', title: 'Do it' },
+          actorId,
+        ),
       ).rejects.toThrow(UnprocessableEntityException);
       expect(tx.task.create).not.toHaveBeenCalled();
     });
@@ -109,20 +123,52 @@ describe('TasksService', () => {
       ]);
       tx.task.create.mockResolvedValue({ id: 'new', position: 2 });
 
-      await service.create(projectId, boardId, {
-        columnId: 'col',
-        title: 'Third',
-      });
+      await service.create(
+        projectId,
+        boardId,
+        { columnId: 'col', title: 'Third' },
+        actorId,
+      );
 
       expect(tx.task.create.mock.calls[0][0].data.position).toBe(2);
       expect(tx.task.update).not.toHaveBeenCalled();
+      // No assignee, so nobody is notified.
+      expect(notifications.notify).not.toHaveBeenCalled();
+    });
+
+    it('notifies the assignee once the task exists', async () => {
+      prisma.projectMembership.findUnique.mockResolvedValue({ id: 'pm' });
+      tx.task.findMany.mockResolvedValue([]);
+      tx.task.create.mockResolvedValue({ id: 'new', position: 0 });
+      tx.task.findUniqueOrThrow.mockResolvedValue({
+        id: 'new',
+        title: 'Fix login',
+        labels: [],
+      });
+
+      await service.create(
+        projectId,
+        boardId,
+        { columnId: 'col', title: 'Fix login', assigneeId: userId },
+        actorId,
+      );
+
+      expect(notifications.notify).toHaveBeenCalledWith({
+        recipientId: userId,
+        actorId,
+        type: NotificationType.TASK_ASSIGNED,
+        projectId,
+        boardId,
+        taskId: 'new',
+        subject: 'Fix login',
+      });
     });
   });
 
   describe('update', () => {
     it('requires at least one field', async () => {
       await expect(
-        service.update(projectId, boardId, 'task', {}),
+        service.update(projectId, boardId, 'task', {}, actorId),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -130,26 +176,82 @@ describe('TasksService', () => {
       prisma.task.findFirst.mockResolvedValue({ id: 'task' });
       prisma.task.update.mockResolvedValue({ id: 'task', labels: [] });
 
-      await service.update(projectId, boardId, 'task', {
-        assigneeId: null,
-        dueDate: null,
-        description: null,
-      });
+      await service.update(
+        projectId,
+        boardId,
+        'task',
+        { assigneeId: null, dueDate: null, description: null },
+        actorId,
+      );
 
       expect(prisma.task.update.mock.calls[0][0].data).toEqual({
         assigneeId: null,
         dueDate: null,
         description: null,
       });
-      // Clearing needs no membership lookup.
+      // Clearing needs no membership lookup, and tells no one anything.
       expect(prisma.projectMembership.findUnique).not.toHaveBeenCalled();
+      expect(notifications.notify).not.toHaveBeenCalled();
+    });
+
+    it('notifies a NEW assignee', async () => {
+      prisma.projectMembership.findUnique.mockResolvedValue({ id: 'pm' });
+      prisma.task.findFirst.mockResolvedValue({ id: 'task', assigneeId: null });
+      prisma.task.update.mockResolvedValue({
+        id: 'task',
+        title: 'Fix login',
+        labels: [],
+      });
+
+      await service.update(
+        projectId,
+        boardId,
+        'task',
+        { assigneeId: userId },
+        actorId,
+      );
+
+      expect(notifications.notify).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recipientId: userId,
+          actorId,
+          type: NotificationType.TASK_ASSIGNED,
+          taskId: 'task',
+          subject: 'Fix login',
+        }),
+      );
+    });
+
+    it('does not notify when the assignee is unchanged', async () => {
+      prisma.projectMembership.findUnique.mockResolvedValue({ id: 'pm' });
+      prisma.task.findFirst.mockResolvedValue({
+        id: 'task',
+        assigneeId: userId,
+      });
+      prisma.task.update.mockResolvedValue({ id: 'task', labels: [] });
+
+      await service.update(
+        projectId,
+        boardId,
+        'task',
+        { assigneeId: userId, priority: 'HIGH' },
+        actorId,
+      );
+
+      expect(notifications.notify).not.toHaveBeenCalled();
     });
 
     it('rejects a non-member assignee (422)', async () => {
       prisma.projectMembership.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.update(projectId, boardId, 'task', { assigneeId: userId }),
+        service.update(
+          projectId,
+          boardId,
+          'task',
+          { assigneeId: userId },
+          actorId,
+        ),
       ).rejects.toThrow(UnprocessableEntityException);
     });
 
@@ -157,7 +259,7 @@ describe('TasksService', () => {
       prisma.task.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.update(projectId, boardId, 'task', { title: 'New' }),
+        service.update(projectId, boardId, 'task', { title: 'New' }, actorId),
       ).rejects.toThrow(NotFoundException);
     });
   });

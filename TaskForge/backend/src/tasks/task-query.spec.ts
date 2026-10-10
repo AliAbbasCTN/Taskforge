@@ -1,5 +1,6 @@
+// class-transformer reads the decorators' type metadata through the Reflect
+// API, which Nest loads at startup (main.ts) but a bare Jest test does not.
 import 'reflect-metadata';
-
 import { plainToInstance } from 'class-transformer';
 import { TaskPriority } from '@prisma/client';
 import { TaskFilterDto } from './dto/task-filter.dto';

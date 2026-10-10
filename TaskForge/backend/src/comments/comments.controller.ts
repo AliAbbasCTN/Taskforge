@@ -21,6 +21,7 @@ import { Permission } from '../common/authorization/permission.enum';
 import { canActOnProject } from '../common/authorization/project-access';
 import { RequirePermission } from '../common/authorization/require-permission.decorator';
 import { BoardGuard } from '../boards/guards/board.guard';
+import { PublishesChanges } from '../realtime/realtime.decorators';
 import {
   CurrentMembership,
   RequestMembership,
@@ -45,6 +46,7 @@ import { CommentBodyDto } from './dto/comment-body.dto';
  * The task itself is verified inside `CommentsService` (scoped to the board),
  * the same way columns and tasks are - see its class comment.
  */
+@PublishesChanges('comments')
 @Controller(
   'organizations/:id/projects/:projectId/boards/:boardId/tasks/:taskId/comments',
 )

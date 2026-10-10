@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { BoardGuard } from '../boards/guards/board.guard';
 import { OrganizationMembershipGuard } from '../organizations/guards/organization-membership.guard';
 import { ProjectGuard } from '../projects/guards/project.guard';
@@ -8,6 +9,7 @@ import { CommentsController } from './comments.controller';
 import { CommentsService } from './comments.service';
 
 @Module({
+  imports: [NotificationsModule],
   controllers: [CommentsController],
   providers: [
     CommentsService,

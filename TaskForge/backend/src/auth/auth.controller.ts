@@ -7,6 +7,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { DisconnectsUserSockets } from '../realtime/realtime.decorators';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -52,7 +53,9 @@ export class AuthController {
     return this.authService.refresh(dto.refreshToken);
   }
 
+  // Logging out also closes the user's live sockets (every tab and device).
   @Post('logout')
+  @DisconnectsUserSockets()
   @HttpCode(HttpStatus.NO_CONTENT)
   @UseGuards(JwtAuthGuard)
   logout(@CurrentUser() user: AuthenticatedUser) {

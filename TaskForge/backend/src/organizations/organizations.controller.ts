@@ -12,6 +12,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RevalidatesUserRooms } from '../realtime/realtime.decorators';
 import {
   AuthenticatedUser,
   CurrentUser,
@@ -116,7 +117,10 @@ export class OrganizationsController {
     return this.organizationsService.addMember(id, dto);
   }
 
+  // Both of these can take access away (removal, or losing ADMIN/MANAGER
+  // oversight), so the person's live connections are re-checked afterwards.
   @Patch(':id/members/:userId')
+  @RevalidatesUserRooms()
   @RequirePermission(Permission.OrganizationMembersManage)
   @UseGuards(OrganizationMembershipGuard, OrganizationPermissionGuard)
   updateMemberRole(
@@ -128,6 +132,7 @@ export class OrganizationsController {
   }
 
   @Delete(':id/members/:userId')
+  @RevalidatesUserRooms()
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermission(Permission.OrganizationMembersManage)
   @UseGuards(OrganizationMembershipGuard, OrganizationPermissionGuard)

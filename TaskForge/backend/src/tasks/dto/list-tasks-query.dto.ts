@@ -1,3 +1,4 @@
+import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
 import {
   DEFAULT_PAGE_SIZE,
@@ -26,12 +27,16 @@ export type TaskSortField = (typeof TASK_SORT_FIELDS)[number];
  * happen and a way to sort by columns you never meant to expose.
  */
 export class ListTasksQueryDto extends TaskFilterDto {
+  // `@Type(() => Number)` converts "3" -> 3 explicitly, so these fields work
+  // whatever the global pipe's conversion settings are.
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   page: number = 1;
 
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(MAX_PAGE_SIZE)

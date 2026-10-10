@@ -11,6 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PublishesChanges } from '../realtime/realtime.decorators';
 import { Permission } from '../common/authorization/permission.enum';
 import { RequirePermission } from '../common/authorization/require-permission.decorator';
 import { OrganizationMembershipGuard } from '../organizations/guards/organization-membership.guard';
@@ -33,6 +34,7 @@ import { UpdateColumnDto } from './dto/update-column.dto';
  *   PATCH  /:columnId   - rename and/or move to `position`
  *   DELETE /:columnId   - delete an EMPTY column (409 if it still has tasks)
  */
+@PublishesChanges('columns')
 @Controller('organizations/:id/projects/:projectId/boards/:boardId/columns')
 @UseGuards(JwtAuthGuard, OrganizationMembershipGuard, ProjectGuard, BoardGuard)
 export class ColumnsController {

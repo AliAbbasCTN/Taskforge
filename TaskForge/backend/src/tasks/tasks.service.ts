@@ -4,8 +4,9 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { NotificationType, Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   PositionedRow,
   positionChanges,
@@ -41,14 +42,24 @@ import { ListTasksQueryDto } from './dto/list-tasks-query.dto';
  */
 @Injectable()
 export class TasksService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
-  async create(projectId: string, boardId: string, dto: CreateTaskDto) {
+  /** `actorId` is who is making the request - used only to word and
+   * suppress notifications (you are never told about your own actions). */
+  async create(
+    projectId: string,
+    boardId: string,
+    dto: CreateTaskDto,
+    actorId: string,
+  ) {
     if (dto.assigneeId) {
       await this.assertAssignable(projectId, dto.assigneeId);
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const created = await this.prisma.$transaction(async (tx) => {
       await this.assertColumnOnBoard(tx, boardId, dto.columnId);
       const siblings = await this.siblings(tx, dto.columnId);
 
@@ -86,6 +97,21 @@ export class TasksService {
         }),
       );
     });
+
+    // After the transaction has committed - never announce what might still
+    // be rolled back.
+    if (dto.assigneeId) {
+      await this.notifications.notify({
+        recipientId: dto.assigneeId,
+        actorId,
+        type: NotificationType.TASK_ASSIGNED,
+        projectId,
+        boardId,
+        taskId: created.id,
+        subject: created.title,
+      });
+    }
+    return created;
   }
 
   async findOne(boardId: string, taskId: string) {
@@ -130,6 +156,7 @@ export class TasksService {
     boardId: string,
     taskId: string,
     dto: UpdateTaskDto,
+    actorId: string,
   ) {
     const data: Prisma.TaskUncheckedUpdateInput = {};
     if (dto.title !== undefined) {
@@ -158,14 +185,29 @@ export class TasksService {
       );
     }
 
-    await this.findScoped(this.prisma, boardId, taskId);
-    return flattenLabels(
+    const existing = await this.findScoped(this.prisma, boardId, taskId);
+    const updated = flattenLabels(
       await this.prisma.task.update({
         where: { id: taskId },
         data,
         include: TASK_INCLUDE,
       }),
     );
+
+    // Only a CHANGE to a new assignee is news: re-saving the same assignee,
+    // or clearing it, tells no one anything.
+    if (dto.assigneeId && dto.assigneeId !== existing.assigneeId) {
+      await this.notifications.notify({
+        recipientId: dto.assigneeId,
+        actorId,
+        type: NotificationType.TASK_ASSIGNED,
+        projectId,
+        boardId,
+        taskId,
+        subject: updated.title,
+      });
+    }
+    return updated;
   }
 
   /**

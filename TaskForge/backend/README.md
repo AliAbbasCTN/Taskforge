@@ -1,8 +1,8 @@
 # TaskForge Backend
 
-A NestJS + TypeScript backend backed by PostgreSQL via Prisma, with JWT authentication, multi-tenant organizations, teams, RBAC, projects, kanban boards with tasks, labels, comments, and task search/filtering.
+A NestJS + TypeScript backend backed by PostgreSQL via Prisma, with JWT authentication, multi-tenant organizations, teams, RBAC, projects, kanban boards with tasks, labels, comments, task filtering, real-time updates and notifications.
 
-## What exists (Phase 10)
+## What exists (Phase 11)
 
 - **Auth:** `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`
 - **Users:** `GET /users/:id` (self, or anyone sharing an organization with you), `PATCH /users/:id`, `DELETE /users/:id`
@@ -49,6 +49,13 @@ A NestJS + TypeScript backend backed by PostgreSQL via Prisma, with JWT authenti
   - `PUT .../tasks/:taskId/labels` `{ "labelIds": [...] }` — replace a task's labels (all must belong to the project)
   - `GET|POST /organizations/:id/projects/:projectId/labels`, `PATCH|DELETE .../labels/:labelId` — a project's labels (reading: project members; managing: `project:boards:manage`)
   - `GET|POST .../tasks/:taskId/comments`, `PATCH|DELETE .../comments/:commentId` — comments: anyone with `project:tasks:write` may comment; **only the author may edit**; the author **or a project lead / org admin/manager** may delete
+- **Real-time and notifications** (Phase 11)
+  - **WebSocket** (Socket.IO) on the same port. Connect with `auth: { token: <access token> }`; a bad token is refused with `unauthorized`. A socket is closed when its token expires and on logout.
+  - Client → server: `project:join` / `project:leave` with `{ projectId }` (acknowledged `{ ok: true }` or `{ ok: false, error }`). Joining needs the same visibility as the HTTP API; refusals never say whether a project exists.
+  - Server → client: `project:changed` (**ids only**: `{ resource, projectId, boardId?, taskId?, actorId?, at }`) to everyone watching a project after any successful write, and `notification:created` to the recipient.
+  - Removing someone from a project or organization, or changing an organization role, **removes their sockets from rooms they can no longer see** before the response returns.
+  - `GET /notifications?unread=&page=&pageSize=`, `GET /notifications/unread-count`, `POST /notifications/:id/read`, `POST /notifications/read-all` — your inbox; you can only ever see or change your own (another user's id is a `404`).
+  - Notifications are created when: a task is assigned to you (by someone else, and only when the assignee actually changes), someone comments on a task assigned to you, or you are added to a project.
 - `GET /health` — liveness check that also verifies database connectivity
 - Nested resource ownership is independently verified at every level — a team or project ID from one organization can't be accessed through a different organization's URL (a classic IDOR pattern, explicitly guarded against and tested)
 - Malformed IDs in URLs are answered with `404` by the tenant/ownership guards instead of reaching the database
@@ -167,4 +174,4 @@ curl http://localhost:3000/organizations/<orgId>/projects/<projectId>/boards/<bo
 
 ## Structure
 
-Domain module folders (`notifications/`, `files/`, `search/`, `activity/`, `audit/`) are still empty placeholders. See [`../docs/folder-structure.md`](../docs/folder-structure.md) and [`../docs/architecture.md`](../docs/architecture.md).
+Domain module folders (`files/`, `search/`, `activity/`, `audit/`) are still empty placeholders. See [`../docs/folder-structure.md`](../docs/folder-structure.md) and [`../docs/architecture.md`](../docs/architecture.md).

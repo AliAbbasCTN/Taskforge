@@ -39,6 +39,8 @@ model User {
   projectMemberships ProjectMembership[]
   assignedTasks      Task[]
   comments           Comment[]
+  notifications      Notification[] @relation("NotificationRecipient")
+  triggeredNotifications Notification[] @relation("NotificationActor")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -203,6 +205,7 @@ model Project {
   memberships  ProjectMembership[]
   boards       Board[]
   labels       Label[]
+  notifications Notification[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -404,4 +407,56 @@ model Comment {
   @@index([taskId, createdAt])
   @@index([authorId])
   @@map("comments")
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  COMMENT_ADDED
+  ADDED_TO_PROJECT
+}
+
+/// Something that happened that one user should hear about: "Ada assigned you
+/// a task". A notification is a durable, per-user record (the "inbox") - the
+/// real-time socket push is only a hint that a new one exists.
+///
+/// `message` is a SNAPSHOT of the text at the time ("Ada assigned you
+/// 'Fix login'"): if the task is renamed later, the notification still reads
+/// as it did when it happened, the way an email would. The ids beside it
+/// (project, board, task) let the UI link to the thing.
+///
+/// boardId and taskId are deliberately plain columns WITHOUT foreign keys:
+/// deleting a task or board must not silently delete the history of having
+/// been told about it; the link just leads to a "not found" page. The project
+/// IS a real foreign key - deleting a project removes the notifications that
+/// point into it.
+model Notification {
+  id      String  @id @default(uuid()) @db.Uuid
+  userId  String  @map("user_id") @db.Uuid
+  actorId String? @map("actor_id") @db.Uuid
+
+  type    NotificationType
+  message String           @db.VarChar(300)
+
+  projectId String  @map("project_id") @db.Uuid
+  boardId   String? @map("board_id") @db.Uuid
+  taskId    String? @map("task_id") @db.Uuid
+
+  /// NULL means unread.
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  /// The recipient. Deleting the account deletes their inbox.
+  user    User    @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  /// Who caused it. If that account is deleted the notification stays, with
+  /// the actor shown as unknown.
+  actor   User?   @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // The inbox: "my notifications, newest first".
+  @@index([userId, createdAt])
+  // The badge: "how many of mine are unread?" (readAt IS NULL).
+  @@index([userId, readAt])
+  // Lets a project delete find its notifications without scanning the table.
+  @@index([projectId])
+  @@map("notifications")
 }

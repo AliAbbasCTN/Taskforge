@@ -7,12 +7,14 @@ import {
 } from '@nestjs/common';
 import {
   MembershipRole,
+  NotificationType,
   Prisma,
   Project,
   ProjectRole,
   ProjectStatus,
 } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { Permission } from '../common/authorization/permission.enum';
 import { organizationRoleHasPermission } from '../common/authorization/organization-permissions';
 import {
@@ -72,6 +74,7 @@ export class ProjectsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly usersService: UsersService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -261,6 +264,7 @@ export class ProjectsService {
     organizationId: string,
     projectId: string,
     dto: AddProjectMemberDto,
+    actorId: string,
   ): Promise<ProjectMemberSummary> {
     const project = await this.getOrThrow(projectId);
     this.assertActive(project);
@@ -288,6 +292,13 @@ export class ProjectsService {
           userId: user.id,
           role: dto.role ?? ProjectRole.MEMBER,
         },
+      });
+      await this.notifications.notify({
+        recipientId: user.id,
+        actorId,
+        type: NotificationType.ADDED_TO_PROJECT,
+        projectId,
+        subject: project.name,
       });
       return {
         membershipId: membership.id,

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { UsersModule } from '../users/users.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { OrganizationMembershipGuard } from '../organizations/guards/organization-membership.guard';
 import { ProjectsController } from './projects.controller';
 import { ProjectsService } from './projects.service';
@@ -14,7 +15,7 @@ import { ProjectPermissionGuard } from './guards/project-permission.guard';
  * internals.
  */
 @Module({
-  imports: [UsersModule],
+  imports: [UsersModule, NotificationsModule],
   controllers: [ProjectsController],
   providers: [
     ProjectsService,

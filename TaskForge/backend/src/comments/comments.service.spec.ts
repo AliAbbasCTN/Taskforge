@@ -1,5 +1,7 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { NotificationType } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CommentsService } from './comments.service';
 
 /**
@@ -8,6 +10,7 @@ import { CommentsService } from './comments.service';
  */
 describe('CommentsService', () => {
   let service: CommentsService;
+  let notifications: { notify: jest.Mock };
   let prisma: {
     task: { findFirst: jest.Mock };
     comment: {
@@ -27,7 +30,14 @@ describe('CommentsService', () => {
 
   beforeEach(() => {
     prisma = {
-      task: { findFirst: jest.fn().mockResolvedValue({ id: taskId }) },
+      task: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: taskId,
+          title: 'Discuss me',
+          assigneeId: null,
+          column: { board: { projectId: 'project-1' } },
+        }),
+      },
       comment: {
         findMany: jest.fn().mockResolvedValue([]),
         findFirst: jest
@@ -38,7 +48,11 @@ describe('CommentsService', () => {
         delete: jest.fn(),
       },
     };
-    service = new CommentsService(prisma as unknown as PrismaService);
+    notifications = { notify: jest.fn() };
+    service = new CommentsService(
+      prisma as unknown as PrismaService,
+      notifications as unknown as NotificationsService,
+    );
   });
 
   describe('scoping', () => {
@@ -80,6 +94,38 @@ describe('CommentsService', () => {
         authorId: author,
         body: 'Looks good',
       });
+    });
+  });
+
+  describe('notifying the assignee', () => {
+    it('tells the task assignee when someone comments', async () => {
+      prisma.task.findFirst.mockResolvedValue({
+        id: taskId,
+        title: 'Discuss me',
+        assigneeId: 'user-assignee',
+        column: { board: { projectId: 'project-1' } },
+      });
+      prisma.comment.create.mockResolvedValue({ id: 'new' });
+
+      await service.create(boardId, taskId, author, 'Looks good');
+
+      expect(notifications.notify).toHaveBeenCalledWith({
+        recipientId: 'user-assignee',
+        actorId: author,
+        type: NotificationType.COMMENT_ADDED,
+        projectId: 'project-1',
+        boardId,
+        taskId,
+        subject: 'Discuss me',
+      });
+    });
+
+    it('notifies no one when the task has no assignee', async () => {
+      prisma.comment.create.mockResolvedValue({ id: 'new' });
+
+      await service.create(boardId, taskId, author, 'Anyone?');
+
+      expect(notifications.notify).not.toHaveBeenCalled();
     });
   });
 

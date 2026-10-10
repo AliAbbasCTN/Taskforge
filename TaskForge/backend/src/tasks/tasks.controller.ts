@@ -14,6 +14,11 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import {
+  AuthenticatedUser,
+  CurrentUser,
+} from '../common/decorators/current-user.decorator';
+import { PublishesChanges } from '../realtime/realtime.decorators';
 import { Permission } from '../common/authorization/permission.enum';
 import { RequirePermission } from '../common/authorization/require-permission.decorator';
 import { BoardGuard } from '../boards/guards/board.guard';
@@ -47,6 +52,7 @@ import { SetTaskLabelsDto } from './dto/set-task-labels.dto';
  *   POST   /:taskId/move    - move to another column and/or position
  *   DELETE /:taskId         - delete
  */
+@PublishesChanges('tasks')
 @Controller('organizations/:id/projects/:projectId/boards/:boardId/tasks')
 @UseGuards(JwtAuthGuard, OrganizationMembershipGuard, ProjectGuard, BoardGuard)
 export class TasksController {
@@ -67,8 +73,9 @@ export class TasksController {
     @Param('projectId', ParseUUIDPipe) projectId: string,
     @Param('boardId', ParseUUIDPipe) boardId: string,
     @Body() dto: CreateTaskDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.tasksService.create(projectId, boardId, dto);
+    return this.tasksService.create(projectId, boardId, dto, user.id);
   }
 
   @Get(':taskId')
@@ -87,8 +94,9 @@ export class TasksController {
     @Param('boardId', ParseUUIDPipe) boardId: string,
     @Param('taskId', ParseUUIDPipe) taskId: string,
     @Body() dto: UpdateTaskDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.tasksService.update(projectId, boardId, taskId, dto);
+    return this.tasksService.update(projectId, boardId, taskId, dto, user.id);
   }
 
   @Put(':taskId/labels')

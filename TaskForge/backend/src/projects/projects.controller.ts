@@ -24,6 +24,10 @@ import {
   RequestMembership,
 } from '../organizations/decorators/current-membership.decorator';
 import { OrganizationMembershipGuard } from '../organizations/guards/organization-membership.guard';
+import {
+  PublishesChanges,
+  RevalidatesUserRooms,
+} from '../realtime/realtime.decorators';
 import { ProjectGuard } from './guards/project.guard';
 import { ProjectPermissionGuard } from './guards/project-permission.guard';
 import { ProjectsService } from './projects.service';
@@ -66,6 +70,7 @@ import { UpdateProjectMemberRoleDto } from './dto/update-project-member-role.dto
  * `:organizationId`): `OrganizationMembershipGuard` reads `request.params.id`,
  * so the same guard class works on every organization-nested controller.
  */
+@PublishesChanges('project')
 @Controller('organizations/:id/projects')
 @UseGuards(JwtAuthGuard, OrganizationMembershipGuard)
 export class ProjectsController {
@@ -151,8 +156,14 @@ export class ProjectsController {
     @Param('id', ParseUUIDPipe) organizationId: string,
     @Param('projectId', ParseUUIDPipe) projectId: string,
     @Body() dto: AddProjectMemberDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.projectsService.addMember(organizationId, projectId, dto);
+    return this.projectsService.addMember(
+      organizationId,
+      projectId,
+      dto,
+      user.id,
+    );
   }
 
   @Patch(':projectId/members/:userId')
@@ -166,7 +177,10 @@ export class ProjectsController {
     return this.projectsService.updateMemberRole(projectId, userId, dto.role);
   }
 
+  // Removing someone must also cut off their live connection - see
+  // `RevalidatesUserRooms`.
   @Delete(':projectId/members/:userId')
+  @RevalidatesUserRooms()
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermission(Permission.ProjectMembersManage)
   @UseGuards(ProjectGuard, ProjectPermissionGuard)

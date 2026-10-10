@@ -12,6 +12,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PublishesChanges } from '../realtime/realtime.decorators';
 import { Permission } from '../common/authorization/permission.enum';
 import { RequirePermission } from '../common/authorization/require-permission.decorator';
 import { OrganizationMembershipGuard } from '../organizations/guards/organization-membership.guard';
@@ -37,6 +38,7 @@ import { UpdateLabelDto } from './dto/update-label.dto';
  * Attaching labels to a TASK is a task edit (`PUT .../tasks/:taskId/labels`),
  * which any project member may do.
  */
+@PublishesChanges('labels')
 @Controller('organizations/:id/projects/:projectId/labels')
 @UseGuards(JwtAuthGuard, OrganizationMembershipGuard, ProjectGuard)
 export class LabelsController {

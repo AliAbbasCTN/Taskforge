@@ -13,6 +13,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PublishesChanges } from '../realtime/realtime.decorators';
 import { Permission } from '../common/authorization/permission.enum';
 import { RequirePermission } from '../common/authorization/require-permission.decorator';
 import { OrganizationMembershipGuard } from '../organizations/guards/organization-membership.guard';
@@ -47,6 +48,7 @@ import { TaskFilterDto } from '../tasks/dto/task-filter.dto';
  * Nest runs controller-level guards before method-level ones, so reads need
  * no extra decoration and writes can only add checks, never skip any.
  */
+@PublishesChanges('boards')
 @Controller('organizations/:id/projects/:projectId/boards')
 @UseGuards(JwtAuthGuard, OrganizationMembershipGuard, ProjectGuard)
 export class BoardsController {

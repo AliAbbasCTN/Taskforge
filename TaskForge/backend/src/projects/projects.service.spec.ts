@@ -7,11 +7,13 @@ import {
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   MembershipRole,
+  NotificationType,
   Prisma,
   ProjectRole,
   ProjectStatus,
 } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { UsersService } from '../users/users.service';
 import { ProjectsService } from './projects.service';
 
@@ -44,6 +46,7 @@ describe('ProjectsService', () => {
     $transaction: jest.Mock;
   };
   let usersService: { findByEmailSafe: jest.Mock };
+  let notifications: { notify: jest.Mock };
 
   const orgId = 'aaaaaaaa-0000-4000-8000-000000000001';
   const projectId = 'bbbbbbbb-0000-4000-8000-000000000001';
@@ -85,12 +88,14 @@ describe('ProjectsService', () => {
       $transaction: jest.fn(),
     };
     usersService = { findByEmailSafe: jest.fn() };
+    notifications = { notify: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ProjectsService,
         { provide: PrismaService, useValue: prisma },
         { provide: UsersService, useValue: usersService },
+        { provide: NotificationsService, useValue: notifications },
       ],
     }).compile();
 
@@ -307,7 +312,7 @@ describe('ProjectsService', () => {
       usersService.findByEmailSafe.mockResolvedValue(null);
 
       await expect(
-        service.addMember(orgId, projectId, { email: 'nobody@x.com' }),
+        service.addMember(orgId, projectId, { email: 'nobody@x.com' }, userId),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -316,7 +321,7 @@ describe('ProjectsService', () => {
       prisma.membership.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.addMember(orgId, projectId, { email: 'x@example.com' }),
+        service.addMember(orgId, projectId, { email: 'x@example.com' }, userId),
       ).rejects.toThrow(UnprocessableEntityException);
       expect(prisma.projectMembership.create).not.toHaveBeenCalled();
     });
@@ -325,7 +330,7 @@ describe('ProjectsService', () => {
       prisma.project.findUnique.mockResolvedValue(archivedProject);
 
       await expect(
-        service.addMember(orgId, projectId, { email: 'x@example.com' }),
+        service.addMember(orgId, projectId, { email: 'x@example.com' }, userId),
       ).rejects.toThrow(ConflictException);
       expect(usersService.findByEmailSafe).not.toHaveBeenCalled();
     });
@@ -339,14 +344,42 @@ describe('ProjectsService', () => {
         createdAt: new Date(),
       });
 
-      const result = await service.addMember(orgId, projectId, {
-        email: 'x@example.com',
-      });
+      const result = await service.addMember(
+        orgId,
+        projectId,
+        { email: 'x@example.com' },
+        userId,
+      );
 
       expect(prisma.projectMembership.create).toHaveBeenCalledWith({
         data: { projectId, userId: targetUserId, role: ProjectRole.MEMBER },
       });
       expect(result.role).toBe(ProjectRole.MEMBER);
+    });
+
+    it('notifies the person who was added', async () => {
+      usersService.findByEmailSafe.mockResolvedValue({ id: targetUserId });
+      prisma.membership.findUnique.mockResolvedValue({ id: 'm1' });
+      prisma.projectMembership.create.mockResolvedValue({
+        id: 'pm1',
+        role: ProjectRole.MEMBER,
+        createdAt: new Date(),
+      });
+
+      await service.addMember(
+        orgId,
+        projectId,
+        { email: 'x@example.com' },
+        userId,
+      );
+
+      expect(notifications.notify).toHaveBeenCalledWith({
+        recipientId: targetUserId,
+        actorId: userId,
+        type: NotificationType.ADDED_TO_PROJECT,
+        projectId,
+        subject: 'Apollo',
+      });
     });
 
     it('translates a unique-constraint violation into ConflictException', async () => {
@@ -360,8 +393,10 @@ describe('ProjectsService', () => {
       );
 
       await expect(
-        service.addMember(orgId, projectId, { email: 'x@example.com' }),
+        service.addMember(orgId, projectId, { email: 'x@example.com' }, userId),
       ).rejects.toThrow(ConflictException);
+      // A failed add must not announce anything.
+      expect(notifications.notify).not.toHaveBeenCalled();
     });
   });
 

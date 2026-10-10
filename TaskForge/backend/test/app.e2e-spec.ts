@@ -1,10 +1,11 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import type { Response } from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/database/prisma.service';
 import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
+import { createAppValidationPipe } from '../src/common/pipes/app-validation.pipe';
 
 /**
  * END-TO-END tests: boot the real application and issue real HTTP requests
@@ -33,13 +34,8 @@ describe('TaskForge backend (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(
-      new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-      }),
-    );
+    // The SAME pipe the real server uses - see createAppValidationPipe().
+    app.useGlobalPipes(createAppValidationPipe());
     app.useGlobalFilters(new AllExceptionsFilter());
     await app.init();
 
@@ -47,6 +43,7 @@ describe('TaskForge backend (e2e)', () => {
   });
 
   beforeEach(async () => {
+    await prisma.notification.deleteMany();
     await prisma.comment.deleteMany();
     await prisma.taskLabel.deleteMany();
     await prisma.label.deleteMany();
@@ -63,6 +60,7 @@ describe('TaskForge backend (e2e)', () => {
   });
 
   afterAll(async () => {
+    await prisma.notification.deleteMany();
     await prisma.comment.deleteMany();
     await prisma.taskLabel.deleteMany();
     await prisma.label.deleteMany();
@@ -3146,7 +3144,9 @@ describe('TaskForge backend (e2e)', () => {
         return res.body as { id: string; name: string; color: string };
       }
 
-       function setLabels(
+      // Not `async`: it must return the supertest request itself so callers can
+      // chain `.expect(...)`. An `async` function would wrap it in a Promise.
+      function setLabels(
         orgId: string,
         projectId: string,
         boardId: string,

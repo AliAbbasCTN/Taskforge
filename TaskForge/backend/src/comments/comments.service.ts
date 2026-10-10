@@ -3,8 +3,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { NotificationType, Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { SAFE_USER_SELECT } from '../users/users.service';
 
 /** Comments always come back with their author, minus credentials. */
@@ -36,10 +37,13 @@ const WITH_AUTHOR = {
  */
 @Injectable()
 export class CommentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   async list(boardId: string, taskId: string) {
-    await this.assertTaskOnBoard(boardId, taskId);
+    await this.getTaskOnBoard(boardId, taskId);
     return this.prisma.comment.findMany({
       where: { taskId },
       include: WITH_AUTHOR,
@@ -53,11 +57,26 @@ export class CommentsService {
     authorId: string,
     body: string,
   ) {
-    await this.assertTaskOnBoard(boardId, taskId);
-    return this.prisma.comment.create({
+    const task = await this.getTaskOnBoard(boardId, taskId);
+    const comment = await this.prisma.comment.create({
       data: { taskId, authorId, body },
       include: WITH_AUTHOR,
     });
+
+    // The person responsible for the task wants to know it's being discussed
+    // (unless they wrote the comment - `notify` skips that case itself).
+    if (task.assigneeId) {
+      await this.notifications.notify({
+        recipientId: task.assigneeId,
+        actorId: authorId,
+        type: NotificationType.COMMENT_ADDED,
+        projectId: task.column.board.projectId,
+        boardId,
+        taskId,
+        subject: task.title,
+      });
+    }
+    return comment;
   }
 
   async update(
@@ -94,17 +113,21 @@ export class CommentsService {
     await this.prisma.comment.delete({ where: { id: commentId } });
   }
 
-  private async assertTaskOnBoard(
-    boardId: string,
-    taskId: string,
-  ): Promise<void> {
+  /** The task, scoped to the board, with what a notification needs. */
+  private async getTaskOnBoard(boardId: string, taskId: string) {
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, column: { boardId } },
-      select: { id: true },
+      select: {
+        id: true,
+        title: true,
+        assigneeId: true,
+        column: { select: { board: { select: { projectId: true } } } },
+      },
     });
     if (!task) {
       throw new NotFoundException('Task not found');
     }
+    return task;
   }
 
   private async getScoped(boardId: string, taskId: string, commentId: string) {
