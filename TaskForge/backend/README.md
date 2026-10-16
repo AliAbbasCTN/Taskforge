@@ -1,8 +1,8 @@
 # TaskForge Backend
 
-A NestJS + TypeScript backend backed by PostgreSQL via Prisma, with JWT authentication, multi-tenant organizations, teams, RBAC, projects, kanban boards with tasks, labels, comments, task filtering, real-time updates and notifications.
+A NestJS + TypeScript backend backed by PostgreSQL via Prisma, with JWT authentication, multi-tenant organizations, teams, RBAC, projects, kanban boards with tasks, labels, comments, task filtering, real-time updates, notifications and background jobs.
 
-## What exists (Phase 11)
+## What exists (Phase 12)
 
 - **Auth:** `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`
 - **Users:** `GET /users/:id` (self, or anyone sharing an organization with you), `PATCH /users/:id`, `DELETE /users/:id`
@@ -56,13 +56,19 @@ A NestJS + TypeScript backend backed by PostgreSQL via Prisma, with JWT authenti
   - Removing someone from a project or organization, or changing an organization role, **removes their sockets from rooms they can no longer see** before the response returns.
   - `GET /notifications?unread=&page=&pageSize=`, `GET /notifications/unread-count`, `POST /notifications/:id/read`, `POST /notifications/read-all` — your inbox; you can only ever see or change your own (another user's id is a `404`).
   - Notifications are created when: a task is assigned to you (by someone else, and only when the assignee actually changes), someone comments on a task assigned to you, or you are added to a project.
-- `GET /health` — liveness check that also verifies database connectivity
+- **Background jobs** (Phase 12) — Redis + BullMQ
+  - Notification delivery runs in a **queue worker**: 5 attempts with exponential backoff (1s, 2s, 4s, 8s); failed jobs are kept 7 days. If Redis is unreachable it **falls back to inline delivery**. Delivery is **idempotent** (the notification id is chosen at enqueue time and is the primary key), so a retried job never duplicates.
+  - A repeating **nightly job (03:00)** deletes notifications read more than 90 days ago. The schedule is registered with a fixed id, so restarts and multiple instances never duplicate it.
+  - The Socket.IO **Redis adapter** relays real-time events between server instances.
+  - `GET /health` now returns `status` (`ok` / `degraded` when only Redis is down, still 200 / `error` 503 when the database is down), `dependencies: { database, redis }`, and `queues` with `waiting / active / delayed / failed` per queue. Watch `failed` (should be ~0).
+  - Needs `REDIS_URL` (default `redis://localhost:6379`).
+- `GET /health` — liveness and dependency check that also verifies database connectivity
 - Nested resource ownership is independently verified at every level — a team or project ID from one organization can't be accessed through a different organization's URL (a classic IDOR pattern, explicitly guarded against and tested)
 - Malformed IDs in URLs are answered with `404` by the tenant/ownership guards instead of reaching the database
 
 ## Run locally
 
-Requires a running PostgreSQL — from the project root, `docker compose up -d` is the quickest option.
+Requires a running PostgreSQL **and Redis** — from the project root, `docker compose up -d` starts both.
 
 ```bash
 cp .env.example .env

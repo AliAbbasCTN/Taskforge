@@ -11,7 +11,9 @@ import { ListTasksQueryDto } from './list-tasks-query.dto';
  */
 describe('ListTasksQueryDto through the application validation pipe', () => {
   const pipe = createAppValidationPipe();
-  const parse = (query: Record<string, string>) =>
+  // `object`, not `Record<string, string>`: the it.each table below mixes
+  // different keys, which TypeScript sees as a union with optional members.
+  const parse = (query: object) =>
     pipe.transform(query, {
       type: 'query',
       metatype: ListTasksQueryDto,
@@ -42,8 +44,7 @@ describe('ListTasksQueryDto through the application validation pipe', () => {
     expect((await parse({ overdue: 'true' })).overdue).toBe(true);
   });
 
-  
-  it.each<Record<string, string>>([
+  it.each([
     { pageSize: '101' },
     { pageSize: '0' },
     { page: '0' },
@@ -56,5 +57,4 @@ describe('ListTasksQueryDto through the application validation pipe', () => {
   ])('rejects %o', async (query) => {
     await expect(parse(query)).rejects.toThrow(BadRequestException);
   });
-
 });

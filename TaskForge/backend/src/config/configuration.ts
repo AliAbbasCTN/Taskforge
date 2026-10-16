@@ -26,6 +26,12 @@ export default () => ({
     // piece of configuration rather than a hidden implicit dependency.
     url: process.env.DATABASE_URL,
   },
+  redis: {
+    // Used for the job queues (BullMQ) and for relaying real-time events
+    // between server instances (the Socket.IO Redis adapter). The default
+    // matches the Redis container in docker-compose.yml.
+    url: process.env.REDIS_URL || 'redis://localhost:6379',
+  },
   jwt: {
     // Access tokens are short-lived: if one is ever stolen (e.g. via an XSS
     // attack in a future frontend), the window an attacker can use it in is

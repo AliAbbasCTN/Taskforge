@@ -66,6 +66,14 @@ class EnvironmentVariables {
    * real-world JWT implementation mistakes. 32 characters of randomness is a
    * reasonable floor; generate one with `openssl rand -base64 32`.
    */
+  // Optional: falls back to redis://localhost:6379 (see configuration.ts).
+  @IsOptional()
+  @IsUrl(
+    { protocols: ['redis', 'rediss'], require_tld: false },
+    { message: 'REDIS_URL must be a redis:// or rediss:// URL' },
+  )
+  REDIS_URL?: string;
+
   @IsNotEmpty({ message: 'JWT_ACCESS_SECRET is required' })
   @MinLength(32, {
     message: 'JWT_ACCESS_SECRET must be at least 32 characters',

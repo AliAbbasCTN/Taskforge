@@ -29,10 +29,15 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // The WebSocket server needs its own CORS setting (see SocketIoAdapter).
-  app.useWebSocketAdapter(
-    new SocketIoAdapter(app, configService.get<string>('cors.origin') ?? ''),
+  // The WebSocket server needs its own CORS setting, and (via Redis) a way to
+  // share events between server instances - see SocketIoAdapter.
+  const socketAdapter = new SocketIoAdapter(
+    app,
+    configService.get<string>('cors.origin') ?? '',
+    configService.get<string>('redis.url'),
   );
+  socketAdapter.connectToRedis();
+  app.useWebSocketAdapter(socketAdapter);
 
   // Lets NestJS run module shutdown hooks (including closing the Prisma
   // connection pool) when the process receives SIGTERM/SIGINT, instead of

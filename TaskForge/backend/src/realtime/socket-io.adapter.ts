@@ -1,5 +1,7 @@
-import { INestApplicationContext } from '@nestjs/common';
+import { INestApplicationContext, Logger } from '@nestjs/common';
 import { IoAdapter } from '@nestjs/platform-socket.io';
+import { createAdapter } from '@socket.io/redis-adapter';
+import Redis from 'ioredis';
 import type { ServerOptions } from 'socket.io';
 
 /**
@@ -14,17 +16,59 @@ import type { ServerOptions } from 'socket.io';
  * a valid access token. CORS only decides which BROWSER PAGES may try.)
  */
 export class SocketIoAdapter extends IoAdapter {
+  private readonly logger = new Logger(SocketIoAdapter.name);
+  private adapterConstructor?: ReturnType<typeof createAdapter>;
+
   constructor(
     app: INestApplicationContext,
     private readonly corsOrigin: string,
+    private readonly redisUrl?: string,
   ) {
     super(app);
   }
 
+  /**
+   * Connects the Socket.IO "Redis adapter".
+   *
+   * THE PROBLEM IT SOLVES: rooms and connected sockets live in ONE process's
+   * memory. Run two server instances behind a load balancer and a browser
+   * connected to instance A is invisible to instance B - so when a request
+   * handled by B emits `project:changed`, the people connected to A never hear
+   * it. The Redis adapter relays every emit and room operation through Redis
+   * pub/sub, so all instances behave as one big server. It also makes
+   * `fetchSockets()` (used to revoke access when someone is removed) see
+   * sockets on EVERY instance.
+   *
+   * Two connections are needed because a Redis connection that has subscribed
+   * can do nothing but listen: one to publish, one to subscribe.
+   *
+   * Without a `redisUrl` (e.g. in tests) this is a no-op and the default
+   * in-memory adapter is used - correct for a single instance.
+   */
+  connectToRedis(): void {
+    if (!this.redisUrl) {
+      return;
+    }
+    const publisher = new Redis(this.redisUrl);
+    const subscriber = publisher.duplicate();
+    // An unhandled 'error' event would crash the process; log it instead. The
+    // client reconnects by itself.
+    for (const client of [publisher, subscriber]) {
+      client.on('error', (error) =>
+        this.logger.warn(`Redis adapter connection error: ${error.message}`),
+      );
+    }
+    this.adapterConstructor = createAdapter(publisher, subscriber);
+  }
+
   createIOServer(port: number, options?: ServerOptions) {
-    return super.createIOServer(port, {
+    const server = super.createIOServer(port, {
       ...options,
       cors: { origin: this.corsOrigin, credentials: true },
     });
+    if (this.adapterConstructor) {
+      server.adapter(this.adapterConstructor);
+    }
+    return server;
   }
 }

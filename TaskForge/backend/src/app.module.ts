@@ -13,11 +13,14 @@ import { LabelsModule } from './labels/labels.module';
 import { CommentsModule } from './comments/comments.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { QueuesModule } from './queues/queues.module';
+import { MaintenanceModule } from './maintenance/maintenance.module';
 
 @Module({
   imports: [
     AppConfigModule,
     DatabaseModule,
+    QueuesModule,
     HealthModule,
     UsersModule,
     AuthModule,
@@ -30,6 +33,7 @@ import { RealtimeModule } from './realtime/realtime.module';
     CommentsModule,
     NotificationsModule,
     RealtimeModule,
+    MaintenanceModule,
   ],
 })
 export class AppModule {}

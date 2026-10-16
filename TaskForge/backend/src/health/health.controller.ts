@@ -2,6 +2,7 @@ import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
 import { PrismaService } from '../database/prisma.service';
+import { QueueMonitorService } from '../queues/queue-monitor.service';
 
 /**
  * WHAT: A health-check endpoint reporting whether the service and its
@@ -28,21 +29,46 @@ export class HealthController {
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly queueMonitor: QueueMonitorService,
   ) {}
 
   @Get()
   async check(@Res({ passthrough: true }) res: Response) {
-    const databaseStatus = await this.checkDatabase();
-    const isHealthy = databaseStatus === 'up';
+    const [databaseStatus, queues] = await Promise.all([
+      this.checkDatabase(),
+      this.queueMonitor.snapshot(),
+    ]);
 
-    res.status(isHealthy ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE);
+    // Three levels, because dependencies are not equally essential:
+    //   error    - the database is down: nothing works, report 503 so a load
+    //              balancer stops sending traffic here.
+    //   degraded - Redis is down: the app still serves requests (notifications
+    //              fall back to inline delivery, live updates stop reaching
+    //              other server instances), so stay 200 but SAY something is
+    //              wrong for whoever is watching.
+    //   ok       - everything is reachable.
+    const status =
+      databaseStatus === 'down'
+        ? 'error'
+        : queues.redis === 'down'
+          ? 'degraded'
+          : 'ok';
+
+    res.status(
+      status === 'error' ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.OK,
+    );
 
     return {
-      status: isHealthy ? 'ok' : 'error',
+      status,
       environment: this.configService.get<string>('app.nodeEnv'),
       dependencies: {
         database: databaseStatus,
+        redis: queues.redis,
       },
+      // Job counts per queue (null when Redis can't be reached). `failed`
+      // should normally be 0 - a rising number means background work is
+      // failing. See docs/phase-12-concepts.md for the monitoring strategy.
+      queues: queues.queues,
       timestamp: new Date().toISOString(),
     };
   }

@@ -6,6 +6,7 @@ import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/database/prisma.service';
 import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
 import { createAppValidationPipe } from '../src/common/pipes/app-validation.pipe';
+import { settleNotifications } from './helpers/queues';
 
 /**
  * END-TO-END tests: boot the real application and issue real HTTP requests
@@ -43,6 +44,9 @@ describe('TaskForge backend (e2e)', () => {
   });
 
   beforeEach(async () => {
+    // Assigning tasks queues notification jobs; let them finish first, so a
+    // late job doesn't land in the next test's freshly wiped database.
+    await settleNotifications(app);
     await prisma.notification.deleteMany();
     await prisma.comment.deleteMany();
     await prisma.taskLabel.deleteMany();
@@ -60,6 +64,12 @@ describe('TaskForge backend (e2e)', () => {
   });
 
   afterAll(async () => {
+    // If startup failed, there is nothing to clean up - and a second error
+    // here would only bury the real one.
+    if (!app || !prisma) {
+      return;
+    }
+    await settleNotifications(app);
     await prisma.notification.deleteMany();
     await prisma.comment.deleteMany();
     await prisma.taskLabel.deleteMany();

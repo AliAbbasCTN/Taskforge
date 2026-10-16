@@ -1,5 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
-import { NotificationType } from '@prisma/client';
+import type { Queue } from 'bullmq';
+import { NotificationType, Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { ListNotificationsQueryDto } from './dto/list-notifications-query.dto';
@@ -8,6 +9,7 @@ import { NotificationsService } from './notifications.service';
 describe('NotificationsService', () => {
   let service: NotificationsService;
   let realtime: { emitToUser: jest.Mock };
+  let queue: { add: jest.Mock };
   let prisma: {
     user: { findUnique: jest.Mock };
     notification: {
@@ -38,6 +40,7 @@ describe('NotificationsService', () => {
 
   beforeEach(() => {
     realtime = { emitToUser: jest.fn() };
+    queue = { add: jest.fn().mockResolvedValue({}) };
     prisma = {
       user: { findUnique: jest.fn().mockResolvedValue({ name: 'Ada' }) },
       notification: {
@@ -56,17 +59,87 @@ describe('NotificationsService', () => {
     service = new NotificationsService(
       prisma as unknown as PrismaService,
       realtime as unknown as RealtimeService,
+      queue as unknown as Queue,
     );
   });
 
-  describe('notify', () => {
-    it("stores the notification, then pushes it to the recipient's user room", async () => {
-      const created = { id: 'n1', message: 'Ada assigned you "Fix login"' };
+  const jobData = (overrides = {}) => ({
+    notificationId: 'notif-1',
+    ...input(),
+    ...overrides,
+  });
+
+  describe('notify (enqueue)', () => {
+    it('adds a job to the queue - and does NOT write to the database itself', async () => {
+      await service.notify(input());
+
+      expect(queue.add).toHaveBeenCalledTimes(1);
+      const [name, data, options] = queue.add.mock.calls[0];
+      expect(name).toBe('deliver-notification');
+      expect(data).toMatchObject(input());
+      // The id is chosen NOW, and doubles as the queue's own de-duplication key.
+      expect(data.notificationId).toEqual(expect.any(String));
+      expect(options).toEqual({ jobId: data.notificationId });
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('never queues a notification about your own action', async () => {
+      await service.notify(input({ recipientId: me, actorId: me }));
+
+      expect(queue.add).not.toHaveBeenCalled();
+    });
+
+    it('falls back to INLINE delivery when the queue is unavailable (Redis down)', async () => {
+      queue.add.mockRejectedValue(new Error('ECONNREFUSED'));
+      const created = { id: 'n1' };
       prisma.notification.create.mockResolvedValue(created);
 
       await service.notify(input());
 
+      expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+      expect(realtime.emitToUser).toHaveBeenCalledWith(
+        other,
+        'notification:created',
+        created,
+      );
+    });
+
+    it('falls back too when the queue just never answers (bounded wait, not a hung request)', async () => {
+      jest.useFakeTimers();
+      try {
+        queue.add.mockReturnValue(new Promise(() => undefined));
+        prisma.notification.create.mockResolvedValue({ id: 'n1' });
+
+        const pending = service.notify(input());
+        await jest.advanceTimersByTimeAsync(2000);
+        await pending;
+
+        expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('never throws: if even the inline fallback fails it only logs', async () => {
+      queue.add.mockRejectedValue(new Error('redis down'));
+      prisma.notification.create.mockRejectedValue(new Error('db down'));
+
+      await expect(service.notify(input())).resolves.toBeUndefined();
+    });
+  });
+
+  describe('deliver (what the worker runs)', () => {
+    it('stores the notification under the id chosen at enqueue time, then pushes it live', async () => {
+      const created = {
+        id: 'notif-1',
+        message: 'Ada assigned you "Fix login"',
+      };
+      prisma.notification.create.mockResolvedValue(created);
+
+      await service.deliver(jobData());
+
       expect(prisma.notification.create.mock.calls[0][0].data).toEqual({
+        id: 'notif-1',
         userId: other,
         actorId: me,
         type: NotificationType.TASK_ASSIGNED,
@@ -82,29 +155,45 @@ describe('NotificationsService', () => {
       );
     });
 
-    it('never notifies you about your own action', async () => {
-      await service.notify(input({ recipientId: me, actorId: me }));
+    it('is IDEMPOTENT: a retry of an already-created notification creates nothing new, and still pushes', async () => {
+      prisma.notification.create.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: 'test',
+        }),
+      );
+      const existing = { id: 'notif-1' };
+      prisma.notification.findUniqueOrThrow.mockResolvedValue(existing);
 
-      expect(prisma.notification.create).not.toHaveBeenCalled();
+      await expect(service.deliver(jobData())).resolves.toBeUndefined();
+
+      expect(prisma.notification.findUniqueOrThrow).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'notif-1' } }),
+      );
+      // The earlier attempt may have died before the live push, so push again.
+      expect(realtime.emitToUser).toHaveBeenCalledWith(
+        other,
+        'notification:created',
+        existing,
+      );
+    });
+
+    it('THROWS on any other failure, so the queue retries it - and pushes nothing', async () => {
+      prisma.notification.create.mockRejectedValue(new Error('db timeout'));
+
+      await expect(service.deliver(jobData())).rejects.toThrow('db timeout');
       expect(realtime.emitToUser).not.toHaveBeenCalled();
     });
 
     it('words the message without an actor name when the actor is unknown', async () => {
-      prisma.notification.create.mockResolvedValue({ id: 'n1' });
+      prisma.notification.create.mockResolvedValue({ id: 'n' });
 
-      await service.notify(input({ actorId: null }));
+      await service.deliver(jobData({ actorId: null }));
 
       expect(prisma.user.findUnique).not.toHaveBeenCalled();
       expect(prisma.notification.create.mock.calls[0][0].data.message).toBe(
         'Someone assigned you "Fix login"',
       );
-    });
-
-    it('is best-effort: a failure is swallowed so it cannot fail the real operation', async () => {
-      prisma.notification.create.mockRejectedValue(new Error('db down'));
-
-      await expect(service.notify(input())).resolves.toBeUndefined();
-      expect(realtime.emitToUser).not.toHaveBeenCalled();
     });
   });
 

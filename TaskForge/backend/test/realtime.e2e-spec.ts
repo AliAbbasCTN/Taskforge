@@ -7,6 +7,7 @@ import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/database/prisma.service';
 import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
 import { createAppValidationPipe } from '../src/common/pipes/app-validation.pipe';
+import { settleNotifications } from './helpers/queues';
 
 /**
  * REAL-TIME end-to-end tests. Unlike the HTTP e2e file, this boots an app that
@@ -58,7 +59,12 @@ describe('Realtime (e2e)', () => {
     await prisma.organization.deleteMany();
   };
 
-  beforeEach(wipe);
+  beforeEach(async () => {
+    // A job left over from the previous test would otherwise land AFTER the
+    // wipe, in the next test's data.
+    await settleNotifications(app);
+    await wipe();
+  });
 
   afterEach(() => {
     openSockets.splice(0).forEach((socket) => socket.close());
@@ -200,7 +206,14 @@ describe('Realtime (e2e)', () => {
         .expect(201)
     ).body;
 
-      await prisma.notification.deleteMany();
+    // Building the world is itself notifiable: adding `member` to the project
+    // told them so - and since Phase 12 that notification is delivered by a
+    // background WORKER, so wait for it to land before clearing, or it would
+    // arrive after the clear. Tests are about what happens NEXT, so start from
+    // empty inboxes (the "added to project" notification has its own test,
+    // which adds someone AFTER this point).
+    await settleNotifications(app);
+    await prisma.notification.deleteMany();
 
     return {
       admin,
@@ -474,13 +487,17 @@ describe('Realtime (e2e)', () => {
   // ------------------------------------------------------------------ notifications
 
   describe('notifications', () => {
-    const unreadCount = async (token: string) =>
-      (
+    // Notifications are created by a background worker, so wait for the queue
+    // to drain before reading - see helpers/queues.ts.
+    const unreadCount = async (token: string) => {
+      await settleNotifications(app);
+      return (
         await api()
           .get('/notifications/unread-count')
           .set('Authorization', bearer(token))
           .expect(200)
       ).body.count as number;
+    };
 
     it('requires authentication', async () => {
       await api().get('/notifications').expect(401);
@@ -623,6 +640,7 @@ describe('Realtime (e2e)', () => {
           assigneeId: w.member.id,
         }).expect(201);
       }
+      await settleNotifications(app);
       const inbox = await api()
         .get('/notifications')
         .set('Authorization', bearer(w.member.token))
@@ -659,6 +677,7 @@ describe('Realtime (e2e)', () => {
           assigneeId: w.member.id,
         }).expect(201);
       }
+      await settleNotifications(app);
       const list = (query: string) =>
         api()
           .get(`/notifications?${query}`)
@@ -691,6 +710,7 @@ describe('Realtime (e2e)', () => {
         201,
       );
 
+      await settleNotifications(app);
       const theirs = await api()
         .get('/notifications')
         .set('Authorization', bearer(w.stranger.token))
