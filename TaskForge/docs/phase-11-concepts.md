@@ -94,7 +94,7 @@ Details worth knowing:
 
 ## Trade-offs, Honestly
 
-- **Rooms live in one process's memory.** With several server instances behind a load balancer, an event emitted on instance A won't reach sockets on instance B. The standard fix is the **Socket.IO Redis adapter**, which relays events between instances; it arrives with Redis in Phase 12. Today's design is correct for one instance.
+- **Rooms live in one process's memory.** With several server instances behind a load balancer, an event emitted on instance A won't reach sockets on instance B. The standard fix is the **Socket.IO Redis adapter**, which relays events between instances; it was added with Redis in Phase 12. Today's design is correct for one instance.
 - **The optimistic board update (Phase 10) and live events can briefly disagree.** If another user's event triggers a refetch in the instant between your drop and the server's reply, the card may flicker back and then settle. The `onSettled` refetch always converges on the truth.
 - **No presence ("Ada is viewing this board") or typing indicators.** The room structure would support them; not on the roadmap.
 - **Organization-level changes aren't live.** Rooms are per project, so a *new project* appearing in someone's project list needs a refresh. (A per-organization room would add it.)
@@ -116,7 +116,7 @@ Details worth knowing:
 
 ## What's Deferred
 
-- **Redis adapter / horizontal scaling** and **durable notification delivery** — Phase 12.
+- **Redis adapter / horizontal scaling** and **durable notification delivery** — done in Phase 12 (see `phase-12-concepts.md`).
 - **Email / push notifications** — would reuse `buildNotificationMessage`; not on the roadmap.
 - **Presence and typing indicators**, **per-organization rooms**.
 - **@mentions** — would be a new notification type.

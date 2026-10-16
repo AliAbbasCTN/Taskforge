@@ -22,8 +22,9 @@ TaskForge is a multi-tenant project management platform inspired by tools like J
 **Phase 09 — React Frontend** ✅ Complete
 **Phase 10 — Advanced Task Management** ✅ Complete
 **Phase 11 — WebSockets** ✅ Complete
+**Phase 12 — Redis + BullMQ** ✅ Complete
 
-TaskForge is now **real-time**. When a teammate moves a task, comments, or edits a label, your board updates by itself; a bell in the sidebar counts **notifications** (assigned a task, commented on your task, added to a project) that arrive live and wait in an inbox if you were away. Live connections are authenticated, authorized per project, and cut off the moment you lose access. See [`docs/phase-11-concepts.md`](./docs/phase-11-concepts.md), [`docs/`](./docs) for architecture, and [Setup](#setup) below to run it.
+TaskForge now does its slow and fragile work in the **background**. Notifications are delivered by a queue worker (Redis + BullMQ) with automatic retries and backoff, fall back to inline delivery if Redis is down, and a scheduled nightly job purges old read notifications. Real-time events now work across **several server instances** through the Socket.IO Redis adapter, and `/health` reports Redis and queue counts. See [`docs/phase-12-concepts.md`](./docs/phase-12-concepts.md), [`docs/`](./docs) for architecture, and [Setup](#setup) below to run it.
 
 ---
 
@@ -90,18 +91,19 @@ See [`docs/folder-structure.md`](./docs/folder-structure.md).
 - [`docs/phase-09-concepts.md`](./docs/phase-09-concepts.md) — concepts learned in Phase 09 (React components/state/hooks, auth on the frontend, token storage trade-offs, protected routes, server state, why the UI is never the security boundary)
 - [`docs/phase-10-concepts.md`](./docs/phase-10-concepts.md) — concepts learned in Phase 10 (many-to-many, server-side filtering/sorting/pagination, the query-string boolean trap, data-dependent authorization, optimistic updates, native drag-and-drop)
 - [`docs/phase-11-concepts.md`](./docs/phase-11-concepts.md) — concepts learned in Phase 11 (WebSockets, rooms, invalidation-based real-time, authorizing long-lived connections, notifications)
+- [`docs/phase-12-concepts.md`](./docs/phase-12-concepts.md) — concepts learned in Phase 12 (message queues, retries and backoff, idempotency, graceful degradation, scheduled jobs, the dual-write problem, monitoring background work)
 
 ## Setup
 
-### 1. Start PostgreSQL
+### 1. Start PostgreSQL and Redis
 
-The quickest way is the provided container (requires Docker):
+The quickest way is the provided containers (requires Docker):
 
 ```bash
 docker compose up -d
 ```
 
-This starts PostgreSQL 16 on `localhost:5432` with user/password/database all set to `taskforge`, matching the default `DATABASE_URL` in `.env.example`. If you'd rather use a PostgreSQL you already have installed, just point `DATABASE_URL` at it instead.
+This starts PostgreSQL 16 on `localhost:5432` (user/password/database all `taskforge`, matching the default `DATABASE_URL` in `.env.example`) and, from Phase 12, **Redis 7 on `localhost:6379`**, which the background-job queues and multi-instance real-time need. If `REDIS_URL` is missing from your `backend/.env` it defaults to `redis://localhost:6379`; the updated `.env.example` lists it explicitly. If you'd rather use a PostgreSQL you already have installed, just point `DATABASE_URL` at it instead.
 
 ### 2. Set up the backend
 

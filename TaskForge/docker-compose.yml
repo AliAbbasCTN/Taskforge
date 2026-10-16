@@ -1,15 +1,15 @@
 # TaskForge — local development services
 #
 # NOTE: This is an early, deliberately minimal slice of the Docker work that
-# Phase 18 completes. It exists now purely so you can get a PostgreSQL
-# instance running without installing PostgreSQL directly on your machine.
+# Phase 18 completes. It exists so you can run the INFRASTRUCTURE (PostgreSQL,
+# and from Phase 12 Redis) without installing either on your machine.
 #
 # It does NOT yet containerise the backend or frontend themselves - those
 # are still run with `npm run start:dev` on your host. Phase 18 adds the
-# application Dockerfiles, a Redis service, and full orchestration.
+# application Dockerfiles and full orchestration.
 #
 # Usage:
-#   docker compose up -d      # start PostgreSQL in the background
+#   docker compose up -d      # start PostgreSQL and Redis in the background
 #   docker compose down       # stop it
 #   docker compose down -v    # stop it AND delete all data
 
@@ -38,5 +38,24 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    container_name: taskforge-redis
+    restart: unless-stopped
+    # `--appendonly yes` turns on the append-only file: Redis logs every write
+    # to disk, so queued jobs survive a Redis restart. Without it Redis only
+    # snapshots occasionally, and a crash could lose the most recent jobs.
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '6379:6379'
+    volumes:
+      - taskforge-redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
 volumes:
   taskforge-postgres-data:
+  taskforge-redis-data:

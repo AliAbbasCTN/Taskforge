@@ -24,7 +24,7 @@ This document describes the **planned** database evolution, phase by phase. Noth
 | 08 | `Board`, `BoardColumn`, `Task` (with `TaskPriority` enum) — implemented; see `docs/phase-08-concepts.md`. Labels stay in Phase 10 as planned |
 | 10 | `Comment`, `Label`, `TaskLabel` — implemented; see `docs/phase-10-concepts.md` |
 | 11 | `Notification` — implemented; see `docs/phase-11-concepts.md`. (The original plan listed no new tables for this phase; the in-app inbox needs a durable record, because a socket message alone is lost if the user is offline.) WebSocket events themselves reference existing models and are not stored |
-| 12 | (BullMQ job data — not stored in Postgres, lives in Redis) |
+| 12 | (no new tables — BullMQ job data lives in Redis, not Postgres; implemented, see `docs/phase-12-concepts.md`) |
 | 13 | `Attachment` |
 | 14 | (full-text search indexes on existing tables — no new tables) |
 | 15 | `ActivityLog` |
