@@ -1,6 +1,7 @@
-import { apiRequest } from './http';
+import { apiDownload, apiRequest } from './http';
 import type {
   AppNotification,
+  Attachment,
   AuthResponse,
   BoardSummary,
   BoardView,
@@ -291,6 +292,57 @@ export const commentApi = {
   ) =>
     apiRequest<void>(
       `${commentsPath(orgId, projectId, boardId, taskId)}/${commentId}`,
+      { method: 'DELETE' },
+    ),
+};
+
+const attachmentsPath = (
+  orgId: string,
+  projectId: string,
+  boardId: string,
+  taskId: string,
+) => `${tasksPath(orgId, projectId, boardId)}/${taskId}/attachments`;
+
+export const attachmentApi = {
+  list: (orgId: string, projectId: string, boardId: string, taskId: string) =>
+    apiRequest<Attachment[]>(attachmentsPath(orgId, projectId, boardId, taskId)),
+
+  /** Uploads one file as multipart/form-data in the field the server expects: "file". */
+  upload: (
+    orgId: string,
+    projectId: string,
+    boardId: string,
+    taskId: string,
+    file: File,
+  ) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiRequest<Attachment>(
+      attachmentsPath(orgId, projectId, boardId, taskId),
+      { method: 'POST', formData },
+    );
+  },
+
+  download: (
+    orgId: string,
+    projectId: string,
+    boardId: string,
+    taskId: string,
+    attachmentId: string,
+  ) =>
+    apiDownload(
+      `${attachmentsPath(orgId, projectId, boardId, taskId)}/${attachmentId}/download`,
+    ),
+
+  remove: (
+    orgId: string,
+    projectId: string,
+    boardId: string,
+    taskId: string,
+    attachmentId: string,
+  ) =>
+    apiRequest<void>(
+      `${attachmentsPath(orgId, projectId, boardId, taskId)}/${attachmentId}`,
       { method: 'DELETE' },
     ),
 };

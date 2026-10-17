@@ -130,6 +130,19 @@ export interface Comment {
   author: User | null;
 }
 
+/** A file attached to a task. The file itself is fetched via the download route. */
+export interface Attachment {
+  id: string;
+  taskId: string;
+  /** The name to show and to save the download as. */
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  createdAt: string;
+  /** null if the uploader's account was deleted. */
+  uploader: User | null;
+}
+
 export interface BoardColumn {
   id: string;
   boardId: string;
@@ -184,7 +197,8 @@ export type ChangeResource =
   | 'columns'
   | 'tasks'
   | 'labels'
-  | 'comments';
+  | 'comments'
+  | 'attachments';
 
 /**
  * The payload of the server's `project:changed` socket event. It carries IDS

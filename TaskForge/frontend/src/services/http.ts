@@ -26,6 +26,8 @@ export class ApiError extends Error {
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   body?: unknown;
+  /** A file upload. Sent as multipart/form-data; mutually exclusive with `body`. */
+  formData?: FormData;
   /** Skip the Authorization header and the refresh-on-401 behaviour. Used by
    * login/register/refresh themselves, where a 401 means "wrong credentials",
    * not "your access token expired". */
@@ -57,7 +59,12 @@ async function send(path: string, options: RequestOptions): Promise<Response> {
     return await fetch(`${API_URL}${path}`, {
       method: options.method ?? 'GET',
       headers,
-      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      // For FormData we deliberately set NO Content-Type: the browser adds
+      // `multipart/form-data; boundary=...` itself, and the boundary it picks
+      // must match the body. Setting the header by hand would break uploads.
+      body:
+        options.formData ??
+        (options.body !== undefined ? JSON.stringify(options.body) : undefined),
     });
   } catch {
     // `fetch` only rejects when no response arrived at all.
@@ -149,17 +156,14 @@ async function parse<T>(response: Response): Promise<T> {
 }
 
 /**
- * WHAT: Every call to the backend goes through here.
- *
- * Responsibilities: attach the access token, turn failures into `ApiError`,
- * and - the interesting part - recover from an EXPIRED access token
- * transparently: on a 401 it refreshes the session once and replays the
- * request, so a page never notices that the 15-minute token ran out.
+ * Sends a request with the access token and, on a 401, refreshes the session
+ * once and replays the request. Shared by `apiRequest` (JSON) and
+ * `apiDownload` (files).
  */
-export async function apiRequest<T>(
+async function sendAuthenticated(
   path: string,
-  options: RequestOptions = {},
-): Promise<T> {
+  options: RequestOptions,
+): Promise<Response> {
   const tokenUsed = tokenStore.getAccessToken();
   let response = await send(path, options);
 
@@ -175,5 +179,36 @@ export async function apiRequest<T>(
     }
   }
 
-  return parse<T>(response);
+  return response;
+}
+
+/**
+ * WHAT: Every call to the backend goes through here.
+ *
+ * Responsibilities: attach the access token, turn failures into `ApiError`,
+ * and - the interesting part - recover from an EXPIRED access token
+ * transparently: on a 401 it refreshes the session once and replays the
+ * request, so a page never notices that the 15-minute token ran out.
+ */
+export async function apiRequest<T>(
+  path: string,
+  options: RequestOptions = {},
+): Promise<T> {
+  return parse<T>(await sendAuthenticated(path, options));
+}
+
+/**
+ * WHAT: Downloads a protected file as a Blob.
+ *
+ * WHY not just `<a href="...">`: attachment downloads require the
+ * `Authorization` header, and a plain link or `window.open` cannot send one.
+ * So we fetch the bytes ourselves (with the same token handling as every other
+ * call) and hand the browser a temporary in-memory URL to save from.
+ */
+export async function apiDownload(path: string): Promise<Blob> {
+  const response = await sendAuthenticated(path, {});
+  if (!response.ok) {
+    return parse<never>(response); // throws the right ApiError
+  }
+  return response.blob();
 }

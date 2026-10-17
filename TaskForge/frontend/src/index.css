@@ -471,6 +471,15 @@ input:disabled, select:disabled, textarea:disabled { background: var(--bg); colo
 .comment .actions { gap: 0.9rem; margin-top: 0.2rem; }
 .comment-form { max-width: none; }
 
+/* Phase 13: task attachments */
+.attachments { display: flex; flex-direction: column; gap: 0.75rem; border-top: 1px solid var(--line); padding-top: 1rem; }
+.attachments h3 { font-size: 1rem; }
+.attachment-list { display: flex; flex-direction: column; gap: 0.6rem; }
+.attachment { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.attachment-info { display: flex; flex-direction: column; min-width: 0; font-size: 0.9rem; }
+.attachment-name { overflow-wrap: anywhere; }
+.attachment .actions { gap: 0.9rem; }
+
 /* ---------- List view ---------- */
 
 .table-wrap { overflow-x: auto; margin-top: 1.25rem; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }

@@ -16,6 +16,7 @@ import { ErrorBox, FormError, Loading } from './Feedback';
 import { FormField } from './FormField';
 import { LabelChip } from './LabelChip';
 import { PRIORITY_LABEL } from './TaskCard';
+import { TaskAttachments } from './TaskAttachments';
 import { TaskComments } from './TaskComments';
 
 /**
@@ -290,6 +291,16 @@ function TaskDetails({
       </fieldset>
 
       <FormError error={actionError} />
+
+      <TaskAttachments
+        orgId={orgId}
+        projectId={projectId}
+        boardId={boardId}
+        taskId={task.id}
+        currentUserId={user?.id ?? ''}
+        canWrite={canWrite}
+        canModerate={canModerate}
+      />
 
       <TaskComments
         orgId={orgId}

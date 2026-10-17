@@ -23,8 +23,9 @@ TaskForge is a multi-tenant project management platform inspired by tools like J
 **Phase 10 — Advanced Task Management** ✅ Complete
 **Phase 11 — WebSockets** ✅ Complete
 **Phase 12 — Redis + BullMQ** ✅ Complete
+**Phase 13 — File Uploads** ✅ Complete
 
-TaskForge now does its slow and fragile work in the **background**. Notifications are delivered by a queue worker (Redis + BullMQ) with automatic retries and backoff, fall back to inline delivery if Redis is down, and a scheduled nightly job purges old read notifications. Real-time events now work across **several server instances** through the Socket.IO Redis adapter, and `/health` reports Redis and queue counts. See [`docs/phase-12-concepts.md`](./docs/phase-12-concepts.md), [`docs/`](./docs) for architecture, and [Setup](#setup) below to run it.
+Tasks can now carry **file attachments**. Uploads are validated by their real contents (not the name or the browser's claim), stored under server-generated keys, and served back only through permission-checked downloads. Files live on local disk in development and in **AWS S3** in production, behind one `StorageService` interface selected by `STORAGE_DRIVER`; a nightly background job removes orphaned files. See [`docs/phase-13-concepts.md`](./docs/phase-13-concepts.md), [`docs/`](./docs) for architecture, and [Setup](#setup) below to run it.
 
 ---
 
@@ -92,6 +93,7 @@ See [`docs/folder-structure.md`](./docs/folder-structure.md).
 - [`docs/phase-10-concepts.md`](./docs/phase-10-concepts.md) — concepts learned in Phase 10 (many-to-many, server-side filtering/sorting/pagination, the query-string boolean trap, data-dependent authorization, optimistic updates, native drag-and-drop)
 - [`docs/phase-11-concepts.md`](./docs/phase-11-concepts.md) — concepts learned in Phase 11 (WebSockets, rooms, invalidation-based real-time, authorizing long-lived connections, notifications)
 - [`docs/phase-12-concepts.md`](./docs/phase-12-concepts.md) — concepts learned in Phase 12 (message queues, retries and backoff, idempotency, graceful degradation, scheduled jobs, the dual-write problem, monitoring background work)
+- [`docs/phase-13-concepts.md`](./docs/phase-13-concepts.md) — concepts learned in Phase 13 (never trusting uploads, magic-number validation, server-generated storage keys, path traversal, the storage abstraction, S3 and credentials, the two-system consistency problem, orphan cleanup)
 
 ## Setup
 
@@ -116,6 +118,8 @@ Then open `.env` and replace `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` with t
 
 ```bash
 npm install              # also runs `prisma generate` automatically
+                         # (use `npm install`, not `npm ci`, the first time after Phase 13:
+                         #  it adds the AWS S3 client and updates package-lock.json)
 npx prisma migrate dev   # creates the database tables
 npm run start:dev
 ```
@@ -138,6 +142,17 @@ curl -X POST http://localhost:3000/organizations \
   -H "Authorization: Bearer <accessToken>" \
   -H "Content-Type: application/json" \
   -d '{"name":"Acme Inc."}'
+```
+
+#### File uploads (Phase 13)
+
+Nothing to configure for development: uploads are written to `backend/uploads/` (git-ignored) with the default 10 MB limit. To change that, or to use S3 in production, see the "File uploads" section of `backend/.env.example` and [`docs/phase-13-concepts.md`](./docs/phase-13-concepts.md). Open a task on a board and use **Add attachment**, or from the command line:
+
+```bash
+curl -X POST \
+  "http://localhost:3000/organizations/<orgId>/projects/<projectId>/boards/<boardId>/tasks/<taskId>/attachments" \
+  -H "Authorization: Bearer <accessToken>" \
+  -F "file=@./screenshot.png"
 ```
 
 ### Running Tests

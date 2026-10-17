@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, apiRequest, setAuthFailureHandler } from './http';
+import {
+  ApiError,
+  apiDownload,
+  apiRequest,
+  setAuthFailureHandler,
+} from './http';
 import { tokenStore } from './tokenStore';
 
 /**
@@ -203,5 +208,82 @@ describe('apiRequest', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 204 })));
 
     await expect(apiRequest('/x', { method: 'DELETE' })).resolves.toBeUndefined();
+  });
+});
+
+describe('file uploads and downloads', () => {
+  beforeEach(() => {
+    installFakeLocalStorage();
+    tokenStore.clear();
+    setAuthFailureHandler(null);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('sends FormData as-is and sets NO Content-Type (the browser must add the multipart boundary)', async () => {
+    tokenStore.set({ accessToken: 'A1', refreshToken: 'R1' });
+    const fetchMock = vi.fn(async () => json(201, { id: 'a1' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const formData = new FormData();
+    formData.append('file', new Blob(['hello']), 'hello.txt');
+
+    await apiRequest('/upload', { method: 'POST', formData });
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(init.body).toBe(formData);
+    const headers = init.headers as Record<string, string>;
+    expect(headers['Content-Type']).toBeUndefined();
+    expect(headers.Authorization).toBe('Bearer A1');
+  });
+
+  it('apiDownload returns the file bytes, authenticated', async () => {
+    tokenStore.set({ accessToken: 'A1', refreshToken: 'R1' });
+    const fetchMock = vi.fn(
+      async () => new Response('file-bytes', { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const blob = await apiDownload('/file');
+
+    expect(await blob.text()).toBe('file-bytes');
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(authHeader(init)).toBe('Bearer A1');
+  });
+
+  it('apiDownload recovers from an expired token like any other call', async () => {
+    tokenStore.set({ accessToken: 'expired', refreshToken: 'R1' });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (urlOf(input).endsWith('/auth/refresh')) {
+          return json(200, { accessToken: 'A2', refreshToken: 'R2' });
+        }
+        return authHeader(init) === 'Bearer A2'
+          ? new Response('file-bytes', { status: 200 })
+          : json(401, { statusCode: 401, message: 'Unauthorized' });
+      }),
+    );
+
+    const blob = await apiDownload('/file');
+
+    expect(await blob.text()).toBe('file-bytes');
+  });
+
+  it('apiDownload turns an error response into an ApiError', async () => {
+    tokenStore.set({ accessToken: 'A1', refreshToken: 'R1' });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        json(404, { statusCode: 404, message: 'The file is no longer available' }),
+      ),
+    );
+
+    const error = (await apiDownload('/file').catch((e: unknown) => e)) as ApiError;
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.status).toBe(404);
+    expect(error.message).toBe('The file is no longer available');
   });
 });

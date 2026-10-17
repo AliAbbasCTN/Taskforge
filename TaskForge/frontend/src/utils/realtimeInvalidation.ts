@@ -16,7 +16,7 @@ import type { ProjectChangedEvent } from '../types/api';
  * broader key prefix, which invalidates every entry under it.
  *
  * Query keys used elsewhere: ['board', boardId, filters], ['tasks', boardId, params],
- * ['task', taskId], ['comments', taskId], ['labels', orgId, projectId],
+ * ['task', taskId], ['comments', taskId], ['attachments', taskId], ['labels', orgId, projectId],
  * ['project', orgId, projectId], ['projects', orgId, status], ['boards', orgId, projectId].
  */
 export function queryKeysForChange(event: ProjectChangedEvent): QueryKey[] {
@@ -34,6 +34,8 @@ export function queryKeysForChange(event: ProjectChangedEvent): QueryKey[] {
       return [['boards'], board, taskList];
     case 'comments':
       return [event.taskId ? ['comments', event.taskId] : ['comments']];
+    case 'attachments':
+      return [event.taskId ? ['attachments', event.taskId] : ['attachments']];
     case 'labels':
       // Labels appear on every task, and in the label pickers.
       return [['labels'], board, taskList, ['task']];

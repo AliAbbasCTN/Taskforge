@@ -22,6 +22,15 @@ describe('queryKeysForChange', () => {
     ).toEqual([['comments', 't1']]);
   });
 
+  it('an attachment change refreshes only that task\'s attachments', () => {
+    expect(
+      queryKeysForChange(event({ resource: 'attachments', taskId: 't1' })),
+    ).toEqual([['attachments', 't1']]);
+    expect(queryKeysForChange(event({ resource: 'attachments' }))).toEqual([
+      ['attachments'],
+    ]);
+  });
+
   it('a column change refreshes the board and the list', () => {
     expect(
       queryKeysForChange(event({ resource: 'columns', boardId: 'b1' })),
