@@ -11,6 +11,7 @@ import { BoardsModule } from './boards/boards.module';
 import { TasksModule } from './tasks/tasks.module';
 import { LabelsModule } from './labels/labels.module';
 import { CommentsModule } from './comments/comments.module';
+import { AttachmentsModule } from './attachments/attachments.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { QueuesModule } from './queues/queues.module';
@@ -31,6 +32,7 @@ import { MaintenanceModule } from './maintenance/maintenance.module';
     TasksModule,
     LabelsModule,
     CommentsModule,
+    AttachmentsModule,
     NotificationsModule,
     RealtimeModule,
     MaintenanceModule,

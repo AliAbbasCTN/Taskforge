@@ -2,10 +2,12 @@ import { Logger } from '@nestjs/common';
 import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job, UnrecoverableError } from 'bullmq';
 import { PrismaService } from '../database/prisma.service';
+import { OrphanedFilesCleaner } from '../files/orphaned-files.cleaner';
 import {
   MAINTENANCE_QUEUE,
   NOTIFICATION_RETENTION_DAYS,
   PURGE_OLD_NOTIFICATIONS_JOB,
+  SWEEP_ORPHANED_FILES_JOB,
 } from '../queues/queues.constants';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -14,7 +16,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * WHAT: The worker for the `maintenance` queue: housekeeping that nobody
  * should have to remember to do.
  *
- * Today that is one job, `purge-old-notifications`. Notifications are a
+ * Two jobs: `purge-old-notifications` and `sweep-orphaned-files` (see
+ * `OrphanedFilesCleaner` for the second).
+ *
+ * `purge-old-notifications`: Notifications are a
  * per-user inbox that only ever grows; a notification someone read three
  * months ago is clutter and storage. Deleting READ notifications past the
  * retention window keeps the table (and its indexes) small. UNREAD ones are
@@ -28,7 +33,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export class MaintenanceProcessor extends WorkerHost {
   private readonly logger = new Logger(MaintenanceProcessor.name);
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly orphanedFiles: OrphanedFilesCleaner,
+  ) {
     super();
   }
 
@@ -36,6 +44,8 @@ export class MaintenanceProcessor extends WorkerHost {
     switch (job.name) {
       case PURGE_OLD_NOTIFICATIONS_JOB:
         return this.purgeOldNotifications();
+      case SWEEP_ORPHANED_FILES_JOB:
+        return this.orphanedFiles.sweep();
       default:
         // An unknown job will never succeed, so don't retry it.
         throw new UnrecoverableError(`Unknown maintenance job "${job.name}"`);

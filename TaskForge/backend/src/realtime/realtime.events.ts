@@ -19,7 +19,13 @@ export const PROJECT_LEAVE = 'project:leave';
 
 /** What kind of thing changed. Clients use it to decide what to refetch. */
 export type ChangeResource =
-  'project' | 'boards' | 'columns' | 'tasks' | 'labels' | 'comments';
+  | 'project'
+  | 'boards'
+  | 'columns'
+  | 'tasks'
+  | 'labels'
+  | 'comments'
+  | 'attachments';
 
 /**
  * WHAT: The payload of `project:changed`.

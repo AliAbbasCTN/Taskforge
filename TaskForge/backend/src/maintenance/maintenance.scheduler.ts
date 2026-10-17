@@ -7,6 +7,9 @@ import {
   PURGE_CRON,
   PURGE_OLD_NOTIFICATIONS_JOB,
   PURGE_SCHEDULE_ID,
+  SWEEP_CRON,
+  SWEEP_ORPHANED_FILES_JOB,
+  SWEEP_SCHEDULE_ID,
 } from '../queues/queues.constants';
 
 /**
@@ -33,20 +36,27 @@ export class MaintenanceScheduler implements OnApplicationBootstrap {
   async onApplicationBootstrap(): Promise<void> {
     try {
       await withTimeout(
-        this.queue.upsertJobScheduler(
-          PURGE_SCHEDULE_ID,
-          { pattern: PURGE_CRON },
-          { name: PURGE_OLD_NOTIFICATIONS_JOB },
-        ),
+        Promise.all([
+          this.queue.upsertJobScheduler(
+            PURGE_SCHEDULE_ID,
+            { pattern: PURGE_CRON },
+            { name: PURGE_OLD_NOTIFICATIONS_JOB },
+          ),
+          this.queue.upsertJobScheduler(
+            SWEEP_SCHEDULE_ID,
+            { pattern: SWEEP_CRON },
+            { name: SWEEP_ORPHANED_FILES_JOB },
+          ),
+        ]),
         5000,
-        'Registering maintenance schedule',
+        'Registering maintenance schedules',
       );
       this.logger.log(
-        `Scheduled "${PURGE_OLD_NOTIFICATIONS_JOB}" with cron "${PURGE_CRON}"`,
+        `Scheduled "${PURGE_OLD_NOTIFICATIONS_JOB}" ("${PURGE_CRON}") and "${SWEEP_ORPHANED_FILES_JOB}" ("${SWEEP_CRON}")`,
       );
     } catch (error) {
       this.logger.error(
-        `Could not register the maintenance schedule (is Redis up?): ${String(error)}`,
+        `Could not register the maintenance schedules (is Redis up?): ${String(error)}`,
       );
     }
   }

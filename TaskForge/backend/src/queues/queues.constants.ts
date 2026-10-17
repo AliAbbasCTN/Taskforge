@@ -17,6 +17,15 @@ export const PURGE_CRON = '0 3 * * *';
 /** Read notifications older than this are deleted by the nightly purge. */
 export const NOTIFICATION_RETENTION_DAYS = 90;
 
+/** Deletes stored files that no attachment row refers to any more. */
+export const SWEEP_ORPHANED_FILES_JOB = 'sweep-orphaned-files';
+
+/** Fixed schedule id (so restarts update it rather than duplicate it). */
+export const SWEEP_SCHEDULE_ID = 'sweep-orphaned-files';
+
+/** Every night at 03:30 - after the 03:00 notification purge. */
+export const SWEEP_CRON = '30 3 * * *';
+
 /**
  * How long to wait for Redis to accept a new job before giving up on the queue
  * and doing the work inline instead. Short on purpose: this wait happens inside

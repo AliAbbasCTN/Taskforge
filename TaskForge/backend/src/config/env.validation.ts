@@ -1,6 +1,7 @@
 import { plainToInstance } from 'class-transformer';
 import {
   IsEnum,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -92,6 +93,42 @@ class EnvironmentVariables {
   })
   JWT_REFRESH_SECRET!: string;
 
+  /** 'local' (default) stores uploads on disk; 's3' uses an AWS S3 bucket. */
+  @IsOptional()
+  @IsIn(['local', 's3'], { message: 'STORAGE_DRIVER must be "local" or "s3"' })
+  STORAGE_DRIVER?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  STORAGE_LOCAL_DIR?: string;
+
+  /** Per-file upload limit in megabytes. Capped at 100: uploads are held in memory. */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  UPLOAD_MAX_FILE_SIZE_MB?: number;
+
+  // The four below only matter when STORAGE_DRIVER=s3 (checked in validateEnv).
+  @IsOptional()
+  @IsString()
+  S3_BUCKET?: string;
+
+  @IsOptional()
+  @IsString()
+  S3_REGION?: string;
+
+  @IsOptional()
+  @IsUrl({ require_tld: false }, { message: 'S3_ENDPOINT must be a valid URL' })
+  S3_ENDPOINT?: string;
+
+  @IsOptional()
+  @IsIn(['true', 'false'], {
+    message: 'S3_FORCE_PATH_STYLE must be "true" or "false"',
+  })
+  S3_FORCE_PATH_STYLE?: string;
+
   @IsOptional()
   @IsString()
   JWT_ACCESS_EXPIRES_IN?: string;
@@ -129,6 +166,16 @@ export function validateEnv(config: Record<string, unknown>) {
     throw new Error(
       'JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must be different values',
     );
+  }
+
+  // Another cross-field rule: choosing S3 without saying which bucket/region
+  // would otherwise only fail later, on the first upload.
+  if (validatedConfig.STORAGE_DRIVER === 's3') {
+    if (!validatedConfig.S3_BUCKET || !validatedConfig.S3_REGION) {
+      throw new Error(
+        'S3_BUCKET and S3_REGION are required when STORAGE_DRIVER is "s3"',
+      );
+    }
   }
 
   return validatedConfig;

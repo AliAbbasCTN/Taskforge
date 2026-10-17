@@ -32,6 +32,25 @@ export default () => ({
     // matches the Redis container in docker-compose.yml.
     url: process.env.REDIS_URL || 'redis://localhost:6379',
   },
+  storage: {
+    // Where uploaded files are kept: 'local' (a folder on disk - development)
+    // or 's3' (an AWS S3 bucket - production). See docs/phase-13-concepts.md.
+    driver: process.env.STORAGE_DRIVER || 'local',
+    // Relative paths are resolved from the backend's working directory.
+    localDir: process.env.STORAGE_LOCAL_DIR || 'uploads',
+    // The per-file size limit, converted from megabytes to bytes once, here.
+    maxFileSizeBytes:
+      parseInt(process.env.UPLOAD_MAX_FILE_SIZE_MB || '10', 10) * 1024 * 1024,
+    s3: {
+      bucket: process.env.S3_BUCKET,
+      region: process.env.S3_REGION,
+      // Only for S3-compatible services such as MinIO or LocalStack.
+      endpoint: process.env.S3_ENDPOINT,
+      forcePathStyle: process.env.S3_FORCE_PATH_STYLE === 'true',
+      // NOTE: there are deliberately NO AWS credentials here. The AWS SDK finds
+      // them itself (environment, shared credentials file, or an IAM role).
+    },
+  },
   jwt: {
     // Access tokens are short-lived: if one is ever stolen (e.g. via an XSS
     // attack in a future frontend), the window an attacker can use it in is

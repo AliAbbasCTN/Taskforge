@@ -235,10 +235,14 @@ describe('Background jobs (e2e)', () => {
       });
     });
 
-    it('has the nightly purge scheduled exactly once, however many times the app has started', async () => {
+    it('has each nightly job scheduled exactly once, however many times the app has started', async () => {
       const schedulers = await maintenanceQueue(app).getJobSchedulers();
 
-      expect(schedulers.map((s) => s.pattern)).toEqual(['0 3 * * *']);
+      // The notification purge (03:00) and the orphaned-file sweep (03:30).
+      expect(schedulers.map((s) => s.pattern).sort()).toEqual([
+        '0 3 * * *',
+        '30 3 * * *',
+      ]);
     });
   });
 

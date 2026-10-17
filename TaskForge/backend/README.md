@@ -1,8 +1,8 @@
 # TaskForge Backend
 
-A NestJS + TypeScript backend backed by PostgreSQL via Prisma, with JWT authentication, multi-tenant organizations, teams, RBAC, projects, kanban boards with tasks, labels, comments, task filtering, real-time updates, notifications and background jobs.
+A NestJS + TypeScript backend backed by PostgreSQL via Prisma, with JWT authentication, multi-tenant organizations, teams, RBAC, projects, kanban boards with tasks, labels, comments, file attachments, task filtering, real-time updates, notifications and background jobs.
 
-## What exists (Phase 12)
+## What exists (Phase 13)
 
 - **Auth:** `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`
 - **Users:** `GET /users/:id` (self, or anyone sharing an organization with you), `PATCH /users/:id`, `DELETE /users/:id`
@@ -62,6 +62,15 @@ A NestJS + TypeScript backend backed by PostgreSQL via Prisma, with JWT authenti
   - The Socket.IO **Redis adapter** relays real-time events between server instances.
   - `GET /health` now returns `status` (`ok` / `degraded` when only Redis is down, still 200 / `error` 503 when the database is down), `dependencies: { database, redis }`, and `queues` with `waiting / active / delayed / failed` per queue. Watch `failed` (should be ~0).
   - Needs `REDIS_URL` (default `redis://localhost:6379`).
+- **File attachments** (Phase 13) — under `.../boards/:boardId/tasks/:taskId/attachments`
+  - `POST /` — upload **one** file as `multipart/form-data` in the field `file` (needs `project:tasks:write`; the project must not be archived). Answers `201` with the attachment's metadata.
+  - `GET /` — the task's attachments, oldest first (anyone who can see the project)
+  - `GET /:attachmentId/download` — the file itself, streamed through the API with the permission check on every request, always as a download (`Content-Disposition: attachment`, `nosniff`, locked-down CSP)
+  - `DELETE /:attachmentId` — `204`; the uploader, or a project lead / org admin/manager
+  - **Validation:** extension allow-list (png, jpg, jpeg, gif, webp, pdf, txt, csv, md, docx, xlsx, pptx), the file's **magic number must match its extension** (`415` otherwise), and the stored MIME type is decided by the server, never the client. Over the size limit → `413`; no file → `400`; more than 20 on a task → `409`.
+  - **Storage:** behind a `StorageService` interface chosen by `STORAGE_DRIVER` — `local` (default, `backend/uploads/`) or `s3` (needs `S3_BUCKET`, `S3_REGION`; credentials come from the AWS SDK's default chain / an IAM role, never from this app's config). Keys are server-generated (`attachments/<org>/<project>/<task>/<uuid>.<ext>`) and never returned to clients.
+  - A **nightly job (03:30)** deletes stored files that no attachment refers to (after task/project deletion, or a failed upload) once they are older than 24 hours.
+  - `UPLOAD_MAX_FILE_SIZE_MB` sets the per-file limit (default 10).
 - `GET /health` — liveness and dependency check that also verifies database connectivity
 - Nested resource ownership is independently verified at every level — a team or project ID from one organization can't be accessed through a different organization's URL (a classic IDOR pattern, explicitly guarded against and tested)
 - Malformed IDs in URLs are answered with `404` by the tenant/ownership guards instead of reaching the database
