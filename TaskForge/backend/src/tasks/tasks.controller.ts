@@ -32,6 +32,7 @@ import { UpdateTaskDto } from './dto/update-task.dto';
 import { MoveTaskDto } from './dto/move-task.dto';
 import { ListTasksQueryDto } from './dto/list-tasks-query.dto';
 import { SetTaskLabelsDto } from './dto/set-task-labels.dto';
+import { LogsActivity } from '../activity/activity.decorator';
 
 /**
  * WHAT: HTTP routes for tasks (project CONTENT, so every write needs
@@ -67,6 +68,7 @@ export class TasksController {
   }
 
   @Post()
+  @LogsActivity('task.created')
   @RequirePermission(Permission.ProjectTasksWrite)
   @UseGuards(ProjectPermissionGuard, ProjectActiveGuard)
   create(
@@ -87,6 +89,7 @@ export class TasksController {
   }
 
   @Patch(':taskId')
+  @LogsActivity('task.updated')
   @RequirePermission(Permission.ProjectTasksWrite)
   @UseGuards(ProjectPermissionGuard, ProjectActiveGuard)
   update(
@@ -100,6 +103,7 @@ export class TasksController {
   }
 
   @Put(':taskId/labels')
+  @LogsActivity('task.labels_changed')
   @RequirePermission(Permission.ProjectTasksWrite)
   @UseGuards(ProjectPermissionGuard, ProjectActiveGuard)
   setLabels(
@@ -117,6 +121,7 @@ export class TasksController {
   }
 
   @Post(':taskId/move')
+  @LogsActivity('task.moved')
   @HttpCode(HttpStatus.OK)
   @RequirePermission(Permission.ProjectTasksWrite)
   @UseGuards(ProjectPermissionGuard, ProjectActiveGuard)
@@ -129,6 +134,7 @@ export class TasksController {
   }
 
   @Delete(':taskId')
+  @LogsActivity('task.deleted')
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermission(Permission.ProjectTasksWrite)
   @UseGuards(ProjectPermissionGuard, ProjectActiveGuard)

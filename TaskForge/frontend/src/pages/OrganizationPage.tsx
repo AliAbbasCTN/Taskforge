@@ -55,6 +55,13 @@ export default function OrganizationPage() {
       <header className="page-header">
         <h1>{organization?.name ?? 'Organization'}</h1>
         {organization && <p>You are {organization.role === 'ADMIN' ? 'an admin' : `a ${organization.role.toLowerCase()}`} here.</p>}
+        {organization?.role === 'ADMIN' && (
+          <div className="actions">
+            <Link className="btn" to={`/orgs/${orgId}/audit-log`}>
+              Audit log
+            </Link>
+          </div>
+        )}
       </header>
 
       <section aria-labelledby="projects-heading">

@@ -35,6 +35,9 @@ export const ORGANIZATION_ROLE_PERMISSIONS: Record<
     Permission.OrganizationMembersManage,
     Permission.OrganizationTeamsManageAny,
     Permission.OrganizationProjectsManageAny,
+    // ADMIN only: the trail records membership and role changes - the
+    // organization's most sensitive history.
+    Permission.AuditLogRead,
   ],
   [MembershipRole.MANAGER]: [
     Permission.OrganizationTeamsManageAny,

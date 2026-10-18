@@ -40,6 +40,7 @@ model User {
   assignedTasks      Task[]
   comments           Comment[]
   uploadedAttachments Attachment[]
+  activityLogs       ActivityLog[]
   notifications      Notification[] @relation("NotificationRecipient")
   triggeredNotifications Notification[] @relation("NotificationActor")
 
@@ -70,6 +71,7 @@ model Organization {
   memberships Membership[]
   teams       Team[]
   projects    Project[]
+  activityLogs ActivityLog[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -460,6 +462,52 @@ model Attachment {
   @@index([taskId, createdAt])
   @@index([uploaderId])
   @@map("attachments")
+}
+
+/// One entry in the activity feed / audit trail: "WHO did WHAT to WHICH thing,
+/// and WHEN". Append-only - rows are never edited (a database trigger enforces
+/// it) and there is no API to change or delete them.
+///
+/// Deliberately SNAPSHOT-based and mostly WITHOUT foreign keys: an audit record
+/// must outlive what it describes. "Lena deleted project Apollo" has to stay
+/// readable after Apollo is gone, so `projectId`, `taskId` and `targetId` are
+/// plain ids (no FK, so deleting the project does not delete its history) and
+/// the names (`targetName`, `actorName`) are copied in at the time of the event.
+/// Only `organizationId` is a real FK - deleting a whole tenant deletes its
+/// history - and `actorId` is SET NULL when an account is deleted (the
+/// `actorName` snapshot keeps the entry attributable).
+///
+/// `action` / `targetType` are validated strings, not DB enums, so a new kind
+/// of event never needs a migration. See docs/phase-15-concepts.md.
+model ActivityLog {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @map("organization_id") @db.Uuid
+  projectId      String? @map("project_id") @db.Uuid
+  /// Set for task events and for comment / attachment events on a task, so a
+  /// task's whole timeline is one indexed query.
+  taskId         String? @map("task_id") @db.Uuid
+  actorId        String? @map("actor_id") @db.Uuid
+  actorName      String? @map("actor_name") @db.VarChar(150)
+
+  action     String  @db.VarChar(50)
+  targetType String  @map("target_type") @db.VarChar(30)
+  targetId   String? @map("target_id") @db.Uuid
+  targetName String? @map("target_name") @db.VarChar(255)
+  /// Event details: changed field names, previous/new values, etc.
+  metadata   Json?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor        User?        @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Newest-first feeds: the organization audit trail, a project's feed, a
+  // task's timeline. (created_at DESC matches how they are read.)
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([projectId, createdAt(sort: Desc)])
+  @@index([taskId, createdAt(sort: Desc)])
+  @@index([actorId])
+  @@map("activity_logs")
 }
 
 enum NotificationType {

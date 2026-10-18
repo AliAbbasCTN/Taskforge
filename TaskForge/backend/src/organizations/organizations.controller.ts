@@ -30,6 +30,7 @@ import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
+import { LogsActivity } from '../activity/activity.decorator';
 
 /**
  * WHAT: HTTP routes for organizations (tenants) and their memberships.
@@ -72,6 +73,7 @@ export class OrganizationsController {
   constructor(private readonly organizationsService: OrganizationsService) {}
 
   @Post()
+  @LogsActivity('organization.created')
   create(
     @Body() dto: CreateOrganizationDto,
     @CurrentUser() user: AuthenticatedUser,
@@ -95,6 +97,7 @@ export class OrganizationsController {
   }
 
   @Patch(':id')
+  @LogsActivity('organization.updated')
   @RequirePermission(Permission.OrganizationManage)
   @UseGuards(OrganizationMembershipGuard, OrganizationPermissionGuard)
   update(
@@ -111,6 +114,7 @@ export class OrganizationsController {
   }
 
   @Post(':id/members')
+  @LogsActivity('organization.member_added')
   @RequirePermission(Permission.OrganizationMembersManage)
   @UseGuards(OrganizationMembershipGuard, OrganizationPermissionGuard)
   addMember(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AddMemberDto) {
@@ -120,6 +124,7 @@ export class OrganizationsController {
   // Both of these can take access away (removal, or losing ADMIN/MANAGER
   // oversight), so the person's live connections are re-checked afterwards.
   @Patch(':id/members/:userId')
+  @LogsActivity('organization.member_role_changed')
   @RevalidatesUserRooms()
   @RequirePermission(Permission.OrganizationMembersManage)
   @UseGuards(OrganizationMembershipGuard, OrganizationPermissionGuard)
@@ -132,6 +137,7 @@ export class OrganizationsController {
   }
 
   @Delete(':id/members/:userId')
+  @LogsActivity('organization.member_removed')
   @RevalidatesUserRooms()
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermission(Permission.OrganizationMembersManage)

@@ -36,6 +36,7 @@ import { ProjectGuard } from '../projects/guards/project.guard';
 import { ProjectPermissionGuard } from '../projects/guards/project-permission.guard';
 import { ProjectActiveGuard } from '../projects/guards/project-active.guard';
 import { AttachmentsService } from './attachments.service';
+import { LogsActivity } from '../activity/activity.decorator';
 
 /**
  * WHAT: HTTP routes for a task's attachments.
@@ -75,6 +76,7 @@ export class AttachmentsController {
   }
 
   @Post()
+  @LogsActivity('attachment.added')
   @RequirePermission(Permission.ProjectTasksWrite)
   @UseGuards(ProjectPermissionGuard, ProjectActiveGuard)
   // Size and count limits come from `MulterModule.registerAsync` in
@@ -117,6 +119,7 @@ export class AttachmentsController {
   }
 
   @Delete(':attachmentId')
+  @LogsActivity('attachment.removed')
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermission(Permission.ProjectTasksWrite)
   @UseGuards(ProjectPermissionGuard, ProjectActiveGuard)

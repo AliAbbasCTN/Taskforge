@@ -16,6 +16,7 @@ import { ErrorBox, FormError, Loading } from './Feedback';
 import { FormField } from './FormField';
 import { LabelChip } from './LabelChip';
 import { PRIORITY_LABEL } from './TaskCard';
+import { TaskActivity } from './TaskActivity';
 import { TaskAttachments } from './TaskAttachments';
 import { TaskComments } from './TaskComments';
 
@@ -311,6 +312,8 @@ function TaskDetails({
         canWrite={canWrite}
         canModerate={canModerate}
       />
+
+      <TaskActivity orgId={orgId} projectId={projectId} taskId={task.id} />
 
       {canWrite && (
         <div className="danger-zone">

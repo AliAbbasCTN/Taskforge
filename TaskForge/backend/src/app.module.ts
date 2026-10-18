@@ -13,6 +13,7 @@ import { LabelsModule } from './labels/labels.module';
 import { CommentsModule } from './comments/comments.module';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { SearchModule } from './search/search.module';
+import { ActivityModule } from './activity/activity.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { QueuesModule } from './queues/queues.module';
@@ -35,6 +36,7 @@ import { MaintenanceModule } from './maintenance/maintenance.module';
     CommentsModule,
     AttachmentsModule,
     SearchModule,
+    ActivityModule,
     NotificationsModule,
     RealtimeModule,
     MaintenanceModule,

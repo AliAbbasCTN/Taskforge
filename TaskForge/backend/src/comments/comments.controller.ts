@@ -33,6 +33,7 @@ import { ProjectPermissionGuard } from '../projects/guards/project-permission.gu
 import { ProjectActiveGuard } from '../projects/guards/project-active.guard';
 import { CommentsService } from './comments.service';
 import { CommentBodyDto } from './dto/comment-body.dto';
+import { LogsActivity } from '../activity/activity.decorator';
 
 /**
  * WHAT: HTTP routes for a task's comments.
@@ -63,6 +64,7 @@ export class CommentsController {
   }
 
   @Post()
+  @LogsActivity('comment.created')
   @RequirePermission(Permission.ProjectTasksWrite)
   @UseGuards(ProjectPermissionGuard, ProjectActiveGuard)
   create(
@@ -94,6 +96,7 @@ export class CommentsController {
   }
 
   @Delete(':commentId')
+  @LogsActivity('comment.deleted')
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermission(Permission.ProjectTasksWrite)
   @UseGuards(ProjectPermissionGuard, ProjectActiveGuard)

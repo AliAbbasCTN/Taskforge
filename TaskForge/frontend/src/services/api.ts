@@ -1,5 +1,6 @@
 import { apiDownload, apiRequest } from './http';
 import type {
+  ActivityEntry,
   AppNotification,
   Attachment,
   AuthResponse,
@@ -401,4 +402,41 @@ export const searchApi = {
       `${projectsPath(orgId)}/${projectId}/search/tasks?${query.toString()}`,
     );
   },
+};
+
+export interface ActivityParams {
+  page: number;
+  pageSize: number;
+  action?: string;
+  taskId?: string;
+  from?: string;
+  to?: string;
+}
+
+function activityQuery(params: ActivityParams): string {
+  const query = new URLSearchParams({
+    page: String(params.page),
+    pageSize: String(params.pageSize),
+  });
+  for (const key of ['action', 'taskId', 'from', 'to'] as const) {
+    const value = params[key];
+    if (value) {
+      query.set(key, value);
+    }
+  }
+  return query.toString();
+}
+
+export const activityApi = {
+  /** A project's feed; `taskId` narrows it to one task's timeline. */
+  project: (orgId: string, projectId: string, params: ActivityParams) =>
+    apiRequest<Paginated<ActivityEntry>>(
+      `${projectsPath(orgId)}/${projectId}/activity?${activityQuery(params)}`,
+    ),
+
+  /** The organization-wide audit trail (admins only). */
+  audit: (orgId: string, params: ActivityParams) =>
+    apiRequest<Paginated<ActivityEntry>>(
+      `/organizations/${orgId}/audit-log?${activityQuery(params)}`,
+    ),
 };

@@ -65,6 +65,8 @@ export function useProjectRealtime(projectId: string): void {
       for (const queryKey of queryKeysForChange(event)) {
         void queryClient.invalidateQueries({ queryKey });
       }
+      // Any change in a project is new activity: refresh feeds and timelines.
+      void queryClient.invalidateQueries({ queryKey: ['activity'] });
     });
     return () => {
       stopListening();

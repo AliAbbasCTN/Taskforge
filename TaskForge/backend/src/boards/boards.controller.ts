@@ -25,6 +25,7 @@ import { BoardsService } from './boards.service';
 import { CreateBoardDto } from './dto/create-board.dto';
 import { UpdateBoardDto } from './dto/update-board.dto';
 import { TaskFilterDto } from '../tasks/dto/task-filter.dto';
+import { LogsActivity } from '../activity/activity.decorator';
 
 /**
  * WHAT: HTTP routes for boards, nested under the project they belong to.
@@ -55,6 +56,7 @@ export class BoardsController {
   constructor(private readonly boardsService: BoardsService) {}
 
   @Post()
+  @LogsActivity('board.created')
   @RequirePermission(Permission.ProjectBoardsManage)
   @UseGuards(ProjectPermissionGuard, ProjectActiveGuard)
   create(
@@ -79,6 +81,7 @@ export class BoardsController {
   }
 
   @Patch(':boardId')
+  @LogsActivity('board.updated')
   @RequirePermission(Permission.ProjectBoardsManage)
   @UseGuards(BoardGuard, ProjectPermissionGuard, ProjectActiveGuard)
   update(
@@ -89,6 +92,7 @@ export class BoardsController {
   }
 
   @Delete(':boardId')
+  @LogsActivity('board.deleted')
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermission(Permission.ProjectBoardsManage)
   @UseGuards(BoardGuard, ProjectPermissionGuard, ProjectActiveGuard)

@@ -123,6 +123,28 @@ export interface SearchedTask extends Omit<ListedTask, 'column'> {
   snippet: string | null;
 }
 
+/**
+ * One entry of the activity feed / audit trail. `message` is a ready-made
+ * sentence WITHOUT the person ("moved task “Fix login” from To Do to Done");
+ * show `actorName` in front of it. Names are snapshots taken when the event
+ * happened, so entries stay readable after the thing (or person) is gone.
+ */
+export interface ActivityEntry {
+  id: string;
+  action: string;
+  message: string;
+  targetType: string;
+  targetId: string | null;
+  targetName: string | null;
+  projectId: string | null;
+  taskId: string | null;
+  metadata: Record<string, unknown> | null;
+  /** null once the account has been deleted - `actorName` still says who. */
+  actorId: string | null;
+  actorName: string | null;
+  createdAt: string;
+}
+
 /** The envelope every paginated endpoint returns. */
 export interface Paginated<T> {
   items: T[];

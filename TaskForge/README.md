@@ -25,8 +25,9 @@ TaskForge is a multi-tenant project management platform inspired by tools like J
 **Phase 12 — Redis + BullMQ** ✅ Complete
 **Phase 13 — File Uploads** ✅ Complete
 **Phase 14 — Search & Filtering** ✅ Complete
+**Phase 15 — Activity Logs & Audit Trail** ✅ Complete
 
-Tasks are now **searchable**. A project-wide task search uses PostgreSQL **full-text search** (stemming, relevance ranking, highlighted matches) backed by a GIN index and a trigger-maintained `tsvector`, combined with the existing filters, sorting and pagination; projects can be searched by name or description. This phase also fixes a crash when Redis is unavailable at startup. See [`docs/phase-14-concepts.md`](./docs/phase-14-concepts.md). Earlier: tasks carry file attachments (local disk in development, AWS S3 in production - see [`docs/phase-13-concepts.md`](./docs/phase-13-concepts.md)). See [`docs/`](./docs) for architecture, and [Setup](#setup) below to run it.
+TaskForge now keeps a permanent record of **who did what, and when**: a per-project **activity feed** and per-task timeline for members, and an **organization audit trail** for admins. Entries are snapshots that outlive what they describe, are append-only (enforced by a database trigger), and are recorded by a decorator + interceptor so services stay untouched. See [`docs/phase-15-concepts.md`](./docs/phase-15-concepts.md). Earlier: PostgreSQL full-text task search ([`docs/phase-14-concepts.md`](./docs/phase-14-concepts.md)) and file attachments ([`docs/phase-13-concepts.md`](./docs/phase-13-concepts.md)). See [`docs/`](./docs) for architecture, and [Setup](#setup) below to run it.
 
 ---
 
@@ -96,6 +97,7 @@ See [`docs/folder-structure.md`](./docs/folder-structure.md).
 - [`docs/phase-12-concepts.md`](./docs/phase-12-concepts.md) — concepts learned in Phase 12 (message queues, retries and backoff, idempotency, graceful degradation, scheduled jobs, the dual-write problem, monitoring background work)
 - [`docs/phase-13-concepts.md`](./docs/phase-13-concepts.md) — concepts learned in Phase 13 (never trusting uploads, magic-number validation, server-generated storage keys, path traversal, the storage abstraction, S3 and credentials, the two-system consistency problem, orphan cleanup)
 - [`docs/phase-14-concepts.md`](./docs/phase-14-concepts.md) — concepts learned in Phase 14 (full-text search, tsvector/tsquery, stemming, GIN indexes, trigger-maintained search columns, safe raw SQL, XSS-safe highlighting, choosing between FTS and substring search, graceful degradation when Redis is down)
+- [`docs/phase-15-concepts.md`](./docs/phase-15-concepts.md) — concepts learned in Phase 15 (activity vs audit, snapshot-based history without foreign keys, append-only enforcement with triggers, decorator + interceptor recording, pure describer functions, best-effort vs transactional logging)
 
 ## Setup
 
@@ -149,6 +151,10 @@ curl -X POST http://localhost:3000/organizations \
 #### Running without Docker (Redis and PostgreSQL)
 
 The backend needs PostgreSQL and Redis. Docker Compose is the easiest way to get both (`docker compose up -d` from the project root, after installing Docker Desktop and opening a **new** terminal). If you cannot use Docker: run PostgreSQL locally and point `DATABASE_URL` at it, and get Redis through **WSL2** (`sudo apt install redis-server && sudo service redis-server start`) or **Memurai** (a Redis-compatible Windows service). Without Redis the API still starts and serves requests - notifications are delivered inline and real-time runs in single-instance mode - but background jobs wait, and the end-to-end tests (`npm run test:e2e`) cannot run.
+
+#### Applying the Phase 15 migration
+
+`npx prisma migrate dev` also applies `20261018120000_add_activity_logs`: the `activity_logs` table, its indexes, and a trigger that makes entries append-only. Try it: do something in the app, then open a project (**Recent activity**) or, as an organization admin, **Audit log** on the organization page.
 
 #### Applying the Phase 14 migration
 

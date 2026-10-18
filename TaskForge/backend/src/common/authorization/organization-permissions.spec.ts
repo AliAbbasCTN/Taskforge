@@ -51,6 +51,27 @@ describe('organizationRoleHasPermission', () => {
     ).toBe(false);
   });
 
+  it('only ADMIN can read the audit trail', () => {
+    expect(
+      organizationRoleHasPermission(
+        MembershipRole.ADMIN,
+        Permission.AuditLogRead,
+      ),
+    ).toBe(true);
+    expect(
+      organizationRoleHasPermission(
+        MembershipRole.MANAGER,
+        Permission.AuditLogRead,
+      ),
+    ).toBe(false);
+    expect(
+      organizationRoleHasPermission(
+        MembershipRole.MEMBER,
+        Permission.AuditLogRead,
+      ),
+    ).toBe(false);
+  });
+
   it('ADMIN and MANAGER can oversee every project; MEMBER cannot', () => {
     expect(
       organizationRoleHasPermission(

@@ -32,6 +32,8 @@ export enum Permission {
    * seeing it AND managing it - regardless of personal project membership.
    * See `ProjectGuard` and `ProjectPermissionGuard`. */
   OrganizationProjectsManageAny = 'organization:projects:manage-any',
+  /** Read the organization-wide audit trail (every recorded action). */
+  AuditLogRead = 'organization:audit:read',
 
   // Team-level
   TeamManage = 'team:manage',

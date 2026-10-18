@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { EmptyState, ErrorBox, FormError, Loading } from '../components/Feedback';
 import { FormField } from '../components/FormField';
 import { LabelManager } from '../components/LabelManager';
+import { ProjectActivity } from '../components/ProjectActivity';
 import { useBoards, useCreateBoard } from '../hooks/useBoards';
 import { useOrganization } from '../hooks/useOrganizations';
 import { useProjectRealtime } from '../hooks/useRealtime';
@@ -216,6 +217,8 @@ export default function ProjectPage() {
           </ul>
         )}
       </section>
+
+      <ProjectActivity orgId={orgId} projectId={projectId} />
     </>
   );
 }

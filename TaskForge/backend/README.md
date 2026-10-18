@@ -1,8 +1,8 @@
 # TaskForge Backend
 
-A NestJS + TypeScript backend backed by PostgreSQL via Prisma, with JWT authentication, multi-tenant organizations, teams, RBAC, projects, kanban boards with tasks, labels, comments, file attachments, full-text search, task filtering, real-time updates, notifications and background jobs.
+A NestJS + TypeScript backend backed by PostgreSQL via Prisma, with JWT authentication, multi-tenant organizations, teams, RBAC, projects, kanban boards with tasks, labels, comments, file attachments, full-text search, an activity feed and audit trail, task filtering, real-time updates, notifications and background jobs.
 
-## What exists (Phase 14)
+## What exists (Phase 15)
 
 - **Auth:** `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`
 - **Users:** `GET /users/:id` (self, or anyone sharing an organization with you), `PATCH /users/:id`, `DELETE /users/:id`
@@ -62,6 +62,11 @@ A NestJS + TypeScript backend backed by PostgreSQL via Prisma, with JWT authenti
   - The Socket.IO **Redis adapter** relays real-time events between server instances.
   - `GET /health` now returns `status` (`ok` / `degraded` when only Redis is down, still 200 / `error` 503 when the database is down), `dependencies: { database, redis }`, and `queues` with `waiting / active / delayed / failed` per queue. Watch `failed` (should be ~0).
   - Needs `REDIS_URL` (default `redis://localhost:6379`).
+- **Activity feed & audit trail** (Phase 15)
+  - `GET /organizations/:id/projects/:projectId/activity` — the project's feed, newest first (anyone who can see the project). `?taskId=` gives one task's timeline.
+  - `GET /organizations/:id/audit-log` — the organization-wide audit trail (**ADMIN only**, permission `organization:audit:read`; `403` for others, `404` for non-members).
+  - Both accept `action` (a real action name, else `400`), `actorId`, `from` / `to` (ISO-8601, inclusive), `page`, `pageSize` (max 100); the audit trail also accepts `projectId` and `taskId`. Each item has a ready-made `message` (without the person - show `actorName` in front), snapshot names, and `metadata`.
+  - Recorded automatically for ~25 actions (tasks, projects, boards, members, comments, attachments, organization settings) by `@LogsActivity('task.moved')` on controller methods and a global interceptor. Only **successful** requests are recorded; a failure to record never fails the request. Entries are append-only (database trigger) and survive deletion of what they describe.
 - **Search** (Phase 14)
   - `GET /organizations/:id/projects/:projectId/search/tasks?q=...` — PostgreSQL full-text search over a project's task titles and descriptions. Needs only access to the project (read-only). Words are stemmed (`run` finds `running`); `"quoted phrases"` and `-excluded` words work. Combine with the task filters `priority`, `assigneeId`, `labelId`, `overdue`, plus `boardId`, `columnId`, `sortBy` (`relevance` default, `createdAt`, `dueDate`, `priority`, `title`), `sortOrder`, `page`, `pageSize` (max 100). Returns the usual paginated envelope; each item is a task plus `score`, `titleHighlight` and `snippet` (matches wrapped in `⟦ ⟧`, never HTML) and its column (with `boardId`). `400` for a missing/empty/over-100-character `q` or invalid parameters.
   - `GET /organizations/:id/projects?search=...` — narrows the projects you can see to those whose name or description contains the text (case-insensitive substring; `%` and `_` are literal).

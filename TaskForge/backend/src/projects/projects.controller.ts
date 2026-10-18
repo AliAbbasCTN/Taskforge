@@ -36,6 +36,7 @@ import { UpdateProjectDto } from './dto/update-project.dto';
 import { ListProjectsQueryDto } from './dto/list-projects-query.dto';
 import { AddProjectMemberDto } from './dto/add-project-member.dto';
 import { UpdateProjectMemberRoleDto } from './dto/update-project-member-role.dto';
+import { LogsActivity } from '../activity/activity.decorator';
 
 /**
  * WHAT: HTTP routes for projects and their memberships.
@@ -77,6 +78,7 @@ export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 
   @Post()
+  @LogsActivity('project.created')
   create(
     @Param('id', ParseUUIDPipe) organizationId: string,
     @Body() dto: CreateProjectDto,
@@ -111,6 +113,7 @@ export class ProjectsController {
   }
 
   @Patch(':projectId')
+  @LogsActivity('project.updated')
   @RequirePermission(Permission.ProjectManage)
   @UseGuards(ProjectGuard, ProjectPermissionGuard)
   update(
@@ -121,6 +124,7 @@ export class ProjectsController {
   }
 
   @Post(':projectId/archive')
+  @LogsActivity('project.archived')
   @HttpCode(HttpStatus.OK)
   @RequirePermission(Permission.ProjectManage)
   @UseGuards(ProjectGuard, ProjectPermissionGuard)
@@ -129,6 +133,7 @@ export class ProjectsController {
   }
 
   @Post(':projectId/unarchive')
+  @LogsActivity('project.unarchived')
   @HttpCode(HttpStatus.OK)
   @RequirePermission(Permission.ProjectManage)
   @UseGuards(ProjectGuard, ProjectPermissionGuard)
@@ -137,6 +142,7 @@ export class ProjectsController {
   }
 
   @Delete(':projectId')
+  @LogsActivity('project.deleted')
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermission(Permission.ProjectManage)
   @UseGuards(ProjectGuard, ProjectPermissionGuard)
@@ -151,6 +157,7 @@ export class ProjectsController {
   }
 
   @Post(':projectId/members')
+  @LogsActivity('project.member_added')
   @RequirePermission(Permission.ProjectMembersManage)
   @UseGuards(ProjectGuard, ProjectPermissionGuard)
   addMember(
@@ -168,6 +175,7 @@ export class ProjectsController {
   }
 
   @Patch(':projectId/members/:userId')
+  @LogsActivity('project.member_role_changed')
   @RequirePermission(Permission.ProjectMembersManage)
   @UseGuards(ProjectGuard, ProjectPermissionGuard)
   updateMemberRole(
@@ -181,6 +189,7 @@ export class ProjectsController {
   // Removing someone must also cut off their live connection - see
   // `RevalidatesUserRooms`.
   @Delete(':projectId/members/:userId')
+  @LogsActivity('project.member_removed')
   @RevalidatesUserRooms()
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermission(Permission.ProjectMembersManage)
