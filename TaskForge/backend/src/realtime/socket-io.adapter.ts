@@ -2,6 +2,8 @@ import { INestApplicationContext, Logger } from '@nestjs/common';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
+import { adapterRedisOptions } from '../queues/redis-config';
+import { watchRedisClient } from '../queues/redis-connection-logger';
 import type { ServerOptions } from 'socket.io';
 
 /**
@@ -49,15 +51,17 @@ export class SocketIoAdapter extends IoAdapter {
     if (!this.redisUrl) {
       return;
     }
-    const publisher = new Redis(this.redisUrl);
+    // `adapterRedisOptions` makes pending commands wait for Redis instead of
+    // failing after 20 retries - which used to crash the whole process when
+    // Redis was down at startup (an unhandled rejection from the adapter's
+    // SUBSCRIBE). See its documentation.
+    const publisher = new Redis(adapterRedisOptions(this.redisUrl));
     const subscriber = publisher.duplicate();
-    // An unhandled 'error' event would crash the process; log it instead. The
-    // client reconnects by itself.
-    for (const client of [publisher, subscriber]) {
-      client.on('error', (error) =>
-        this.logger.warn(`Redis adapter connection error: ${error.message}`),
-      );
-    }
+    // An unhandled 'error' event would also crash the process; log it instead
+    // (throttled - a down Redis would otherwise fire several per second). The
+    // clients reconnect by themselves.
+    watchRedisClient(publisher, 'Socket.IO adapter (publisher)', this.logger);
+    watchRedisClient(subscriber, 'Socket.IO adapter (subscriber)', this.logger);
     this.adapterConstructor = createAdapter(publisher, subscriber);
   }
 

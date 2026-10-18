@@ -13,6 +13,7 @@ import {
   ProjectRole,
   ProjectStatus,
 } from '@prisma/client';
+import { escapeLike } from '../common/utils/escape-like';
 import { PrismaService } from '../database/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { Permission } from '../common/authorization/permission.enum';
@@ -121,6 +122,7 @@ export class ProjectsService {
     requesterOrgRole: MembershipRole,
     requesterUserId: string,
     status: ProjectStatus = ProjectStatus.ACTIVE,
+    search?: string,
   ): Promise<ProjectSummary[]> {
     const hasOversight = organizationRoleHasPermission(
       requesterOrgRole,
@@ -133,6 +135,27 @@ export class ProjectsService {
       ...(hasOversight
         ? {}
         : { memberships: { some: { userId: requesterUserId } } }),
+      // Search narrows the list the requester may already see - it is ANDed
+      // with the visibility rules above, so it can never reveal a project the
+      // requester couldn't list anyway.
+      ...(search
+        ? {
+            OR: [
+              {
+                name: {
+                  contains: escapeLike(search),
+                  mode: Prisma.QueryMode.insensitive,
+                },
+              },
+              {
+                description: {
+                  contains: escapeLike(search),
+                  mode: Prisma.QueryMode.insensitive,
+                },
+              },
+            ],
+          }
+        : {}),
     };
 
     // The member count and the requester's own role come back in the SAME

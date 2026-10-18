@@ -12,6 +12,7 @@ import { TasksModule } from './tasks/tasks.module';
 import { LabelsModule } from './labels/labels.module';
 import { CommentsModule } from './comments/comments.module';
 import { AttachmentsModule } from './attachments/attachments.module';
+import { SearchModule } from './search/search.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { QueuesModule } from './queues/queues.module';
@@ -33,6 +34,7 @@ import { MaintenanceModule } from './maintenance/maintenance.module';
     LabelsModule,
     CommentsModule,
     AttachmentsModule,
+    SearchModule,
     NotificationsModule,
     RealtimeModule,
     MaintenanceModule,

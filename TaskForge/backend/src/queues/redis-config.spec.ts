@@ -1,4 +1,8 @@
-import { parseRedisUrl } from './redis-config';
+import {
+  adapterRedisOptions,
+  parseRedisUrl,
+  reconnectDelayMs,
+} from './redis-config';
 
 describe('parseRedisUrl', () => {
   it('parses a plain local URL, defaulting the port', () => {
@@ -39,5 +43,36 @@ describe('parseRedisUrl', () => {
       /database/,
     );
     expect(() => parseRedisUrl('not a url')).toThrow();
+  });
+});
+
+describe('reconnectDelayMs', () => {
+  it('grows with each attempt but never exceeds five seconds', () => {
+    expect(reconnectDelayMs(1)).toBe(200);
+    expect(reconnectDelayMs(5)).toBe(1000);
+    expect(reconnectDelayMs(25)).toBe(5000);
+    expect(reconnectDelayMs(10_000)).toBe(5000);
+  });
+});
+
+describe('adapterRedisOptions', () => {
+  it('never gives up on queued commands (the fix for the startup crash)', () => {
+    const options = adapterRedisOptions('redis://localhost:6379');
+    // `null` means "wait for Redis" rather than reject after 20 attempts.
+    expect(options.maxRetriesPerRequest).toBeNull();
+    expect(options.retryStrategy).toBe(reconnectDelayMs);
+  });
+
+  it('keeps everything parseRedisUrl understood', () => {
+    expect(
+      adapterRedisOptions('rediss://u:p%40ss@cache.example.com:6380/2'),
+    ).toMatchObject({
+      host: 'cache.example.com',
+      port: 6380,
+      username: 'u',
+      password: 'p@ss',
+      db: 2,
+      tls: {},
+    });
   });
 });

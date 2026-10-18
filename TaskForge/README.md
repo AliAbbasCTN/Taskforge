@@ -24,8 +24,9 @@ TaskForge is a multi-tenant project management platform inspired by tools like J
 **Phase 11 — WebSockets** ✅ Complete
 **Phase 12 — Redis + BullMQ** ✅ Complete
 **Phase 13 — File Uploads** ✅ Complete
+**Phase 14 — Search & Filtering** ✅ Complete
 
-Tasks can now carry **file attachments**. Uploads are validated by their real contents (not the name or the browser's claim), stored under server-generated keys, and served back only through permission-checked downloads. Files live on local disk in development and in **AWS S3** in production, behind one `StorageService` interface selected by `STORAGE_DRIVER`; a nightly background job removes orphaned files. See [`docs/phase-13-concepts.md`](./docs/phase-13-concepts.md), [`docs/`](./docs) for architecture, and [Setup](#setup) below to run it.
+Tasks are now **searchable**. A project-wide task search uses PostgreSQL **full-text search** (stemming, relevance ranking, highlighted matches) backed by a GIN index and a trigger-maintained `tsvector`, combined with the existing filters, sorting and pagination; projects can be searched by name or description. This phase also fixes a crash when Redis is unavailable at startup. See [`docs/phase-14-concepts.md`](./docs/phase-14-concepts.md). Earlier: tasks carry file attachments (local disk in development, AWS S3 in production - see [`docs/phase-13-concepts.md`](./docs/phase-13-concepts.md)). See [`docs/`](./docs) for architecture, and [Setup](#setup) below to run it.
 
 ---
 
@@ -94,6 +95,7 @@ See [`docs/folder-structure.md`](./docs/folder-structure.md).
 - [`docs/phase-11-concepts.md`](./docs/phase-11-concepts.md) — concepts learned in Phase 11 (WebSockets, rooms, invalidation-based real-time, authorizing long-lived connections, notifications)
 - [`docs/phase-12-concepts.md`](./docs/phase-12-concepts.md) — concepts learned in Phase 12 (message queues, retries and backoff, idempotency, graceful degradation, scheduled jobs, the dual-write problem, monitoring background work)
 - [`docs/phase-13-concepts.md`](./docs/phase-13-concepts.md) — concepts learned in Phase 13 (never trusting uploads, magic-number validation, server-generated storage keys, path traversal, the storage abstraction, S3 and credentials, the two-system consistency problem, orphan cleanup)
+- [`docs/phase-14-concepts.md`](./docs/phase-14-concepts.md) — concepts learned in Phase 14 (full-text search, tsvector/tsquery, stemming, GIN indexes, trigger-maintained search columns, safe raw SQL, XSS-safe highlighting, choosing between FTS and substring search, graceful degradation when Redis is down)
 
 ## Setup
 
@@ -143,6 +145,14 @@ curl -X POST http://localhost:3000/organizations \
   -H "Content-Type: application/json" \
   -d '{"name":"Acme Inc."}'
 ```
+
+#### Running without Docker (Redis and PostgreSQL)
+
+The backend needs PostgreSQL and Redis. Docker Compose is the easiest way to get both (`docker compose up -d` from the project root, after installing Docker Desktop and opening a **new** terminal). If you cannot use Docker: run PostgreSQL locally and point `DATABASE_URL` at it, and get Redis through **WSL2** (`sudo apt install redis-server && sudo service redis-server start`) or **Memurai** (a Redis-compatible Windows service). Without Redis the API still starts and serves requests - notifications are delivered inline and real-time runs in single-instance mode - but background jobs wait, and the end-to-end tests (`npm run test:e2e`) cannot run.
+
+#### Applying the Phase 14 migration
+
+`npx prisma migrate dev` applies `20261017120000_add_task_full_text_search`: it adds the `search_vector` column, a trigger that keeps it current, a GIN index, and indexes all existing tasks. It needs no extra PostgreSQL extension.
 
 #### File uploads (Phase 13)
 

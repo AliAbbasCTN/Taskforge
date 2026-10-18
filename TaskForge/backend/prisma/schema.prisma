@@ -332,11 +332,22 @@ model Task {
   comments    Comment[]
   attachments Attachment[]
 
+  /// PostgreSQL full-text search document: the title (weight A) and description
+  /// (weight B) reduced to searchable word stems. Prisma cannot model this type,
+  /// so it is `Unsupported`: the client neither reads nor writes it. A database
+  /// TRIGGER (see migration 20261017120000_add_task_full_text_search) keeps it
+  /// current on every insert/update, and only raw SQL queries use it - see
+  /// SearchService and docs/phase-14-concepts.md.
+  searchVector Unsupported("tsvector")? @map("search_vector")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([columnId, position])
   @@index([assigneeId])
+  // The GIN index that makes `search_vector @@ query` fast: it maps each word
+  // to the tasks containing it, instead of scanning every task.
+  @@index([searchVector], type: Gin)
   @@map("tasks")
 }
 

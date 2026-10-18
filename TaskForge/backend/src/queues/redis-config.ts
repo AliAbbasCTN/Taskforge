@@ -40,3 +40,37 @@ export function parseRedisUrl(url: string): RedisOptions {
     ...(parsed.protocol === 'rediss:' ? { tls: {} } : {}),
   };
 }
+
+/**
+ * WHAT: How long to wait before reconnection attempt number `attempt` (1, 2,
+ * 3, ...): 200 ms, 400 ms, 600 ms ... never more than 5 seconds.
+ *
+ * WHY a cap: ioredis' default keeps growing the delay. For a dependency that
+ * should come back within seconds (a restarting container) a short, bounded
+ * delay means TaskForge reconnects almost as soon as Redis is back.
+ */
+export function reconnectDelayMs(attempt: number): number {
+  return Math.min(attempt * 200, 5000);
+}
+
+/**
+ * WHAT: Options for the two long-lived Redis connections of the Socket.IO
+ * adapter (see `SocketIoAdapter`).
+ *
+ * WHY `maxRetriesPerRequest: null` - the fix for a crash. By default ioredis
+ * gives up on a COMMAND after 20 failed reconnect attempts and rejects its
+ * promise with `MaxRetriesPerRequestError`. The adapter issues its
+ * `SUBSCRIBE` commands once, at startup, and nothing handles that promise - so
+ * with Redis down the rejection became an unhandled promise rejection, which
+ * terminates a Node.js process. With `null` the commands simply WAIT, queued,
+ * until Redis is reachable; ioredis then runs them and the adapter starts
+ * working. Until then TaskForge runs normally with single-instance
+ * (in-memory) real-time, which is exactly the degraded mode we want.
+ */
+export function adapterRedisOptions(url: string): RedisOptions {
+  return {
+    ...parseRedisUrl(url),
+    maxRetriesPerRequest: null,
+    retryStrategy: reconnectDelayMs,
+  };
+}

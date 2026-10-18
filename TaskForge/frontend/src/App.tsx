@@ -7,6 +7,7 @@ import DashboardPage from './pages/DashboardPage';
 import OrganizationPage from './pages/OrganizationPage';
 import ProjectPage from './pages/ProjectPage';
 import BoardPage from './pages/BoardPage';
+import SearchPage from './pages/SearchPage';
 import { TaskDetailPanel } from './components/TaskDetailPanel';
 import NotificationsPage from './pages/NotificationsPage';
 import NotFoundPage from './pages/NotFoundPage';
@@ -24,6 +25,7 @@ import NotFoundPage from './pages/NotFoundPage';
  *   /notifications                    your notification inbox
  *   /orgs/:orgId                      an organization's projects
  *   /orgs/:orgId/projects/:projectId  a project and its boards
+ *   /orgs/:orgId/projects/:projectId/search   full-text search of its tasks
  *   /orgs/:orgId/projects/:projectId/boards/:boardId   the kanban board
  *   .../boards/:boardId/tasks/:taskId  the task panel, opened over the board
  */
@@ -43,6 +45,10 @@ export default function App() {
           <Route
             path="orgs/:orgId/projects/:projectId"
             element={<ProjectPage />}
+          />
+          <Route
+            path="orgs/:orgId/projects/:projectId/search"
+            element={<SearchPage />}
           />
           <Route
             path="orgs/:orgId/projects/:projectId/boards/:boardId"

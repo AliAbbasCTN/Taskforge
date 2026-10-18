@@ -85,6 +85,11 @@ export default function ProjectPage() {
           {archived && <span className="tag tag-muted">Archived</span>}
         </div>
         {data.description && <p>{data.description}</p>}
+        <div className="actions">
+          <Link className="btn" to={`/orgs/${orgId}/projects/${projectId}/search`}>
+            Search tasks
+          </Link>
+        </div>
         {canManage && (
           <div className="actions">
             {archived ? (

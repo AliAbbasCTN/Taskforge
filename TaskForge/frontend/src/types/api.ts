@@ -109,6 +109,20 @@ export interface ListedTask extends Task {
   column: { id: string; name: string };
 }
 
+/**
+ * A task as returned by search: the usual task fields plus where it lives
+ * (the board id lets a result link straight to its board), how well it matched,
+ * and fragments with the matched words marked. The marks are the characters
+ * ⟦ and ⟧ - plain text, never HTML. See `splitHighlight`.
+ */
+export interface SearchedTask extends Omit<ListedTask, 'column'> {
+  column: { id: string; name: string; boardId: string };
+  score: number;
+  titleHighlight: string;
+  /** From the description; null if the task has none. */
+  snippet: string | null;
+}
+
 /** The envelope every paginated endpoint returns. */
 export interface Paginated<T> {
   items: T[];

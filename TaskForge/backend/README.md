@@ -1,8 +1,8 @@
 # TaskForge Backend
 
-A NestJS + TypeScript backend backed by PostgreSQL via Prisma, with JWT authentication, multi-tenant organizations, teams, RBAC, projects, kanban boards with tasks, labels, comments, file attachments, task filtering, real-time updates, notifications and background jobs.
+A NestJS + TypeScript backend backed by PostgreSQL via Prisma, with JWT authentication, multi-tenant organizations, teams, RBAC, projects, kanban boards with tasks, labels, comments, file attachments, full-text search, task filtering, real-time updates, notifications and background jobs.
 
-## What exists (Phase 13)
+## What exists (Phase 14)
 
 - **Auth:** `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`
 - **Users:** `GET /users/:id` (self, or anyone sharing an organization with you), `PATCH /users/:id`, `DELETE /users/:id`
@@ -62,6 +62,9 @@ A NestJS + TypeScript backend backed by PostgreSQL via Prisma, with JWT authenti
   - The Socket.IO **Redis adapter** relays real-time events between server instances.
   - `GET /health` now returns `status` (`ok` / `degraded` when only Redis is down, still 200 / `error` 503 when the database is down), `dependencies: { database, redis }`, and `queues` with `waiting / active / delayed / failed` per queue. Watch `failed` (should be ~0).
   - Needs `REDIS_URL` (default `redis://localhost:6379`).
+- **Search** (Phase 14)
+  - `GET /organizations/:id/projects/:projectId/search/tasks?q=...` — PostgreSQL full-text search over a project's task titles and descriptions. Needs only access to the project (read-only). Words are stemmed (`run` finds `running`); `"quoted phrases"` and `-excluded` words work. Combine with the task filters `priority`, `assigneeId`, `labelId`, `overdue`, plus `boardId`, `columnId`, `sortBy` (`relevance` default, `createdAt`, `dueDate`, `priority`, `title`), `sortOrder`, `page`, `pageSize` (max 100). Returns the usual paginated envelope; each item is a task plus `score`, `titleHighlight` and `snippet` (matches wrapped in `⟦ ⟧`, never HTML) and its column (with `boardId`). `400` for a missing/empty/over-100-character `q` or invalid parameters.
+  - `GET /organizations/:id/projects?search=...` — narrows the projects you can see to those whose name or description contains the text (case-insensitive substring; `%` and `_` are literal).
 - **File attachments** (Phase 13) — under `.../boards/:boardId/tasks/:taskId/attachments`
   - `POST /` — upload **one** file as `multipart/form-data` in the field `file` (needs `project:tasks:write`; the project must not be archived). Answers `201` with the attachment's metadata.
   - `GET /` — the task's attachments, oldest first (anyone who can see the project)

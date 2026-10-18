@@ -1,11 +1,23 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { projectApi } from '../services/api';
 import type { ProjectStatus } from '../types/api';
 
-export function useProjects(orgId: string, status: ProjectStatus) {
+export function useProjects(
+  orgId: string,
+  status: ProjectStatus,
+  search?: string,
+) {
   return useQuery({
-    queryKey: ['projects', orgId, status],
-    queryFn: () => projectApi.list(orgId, status),
+    // `search` is part of the key, so each search text is cached separately.
+    // Existing invalidations of ['projects', orgId] still match by prefix.
+    queryKey: ['projects', orgId, status, search ?? ''],
+    queryFn: () => projectApi.list(orgId, status, search),
+    placeholderData: keepPreviousData,
   });
 }
 

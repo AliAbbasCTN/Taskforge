@@ -97,6 +97,7 @@ export class ProjectsController {
       membership.role,
       user.id,
       query.status,
+      query.search,
     );
   }
 

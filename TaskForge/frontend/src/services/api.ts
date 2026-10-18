@@ -10,6 +10,7 @@ import type {
   ListedTask,
   Organization,
   Paginated,
+  SearchedTask,
   Project,
   ProjectMember,
   ProjectStatus,
@@ -62,8 +63,13 @@ export const organizationApi = {
 const projectsPath = (orgId: string) => `/organizations/${orgId}/projects`;
 
 export const projectApi = {
-  list: (orgId: string, status: ProjectStatus) =>
-    apiRequest<ProjectSummary[]>(`${projectsPath(orgId)}?status=${status}`),
+  list: (orgId: string, status: ProjectStatus, search?: string) => {
+    const query = new URLSearchParams({ status });
+    if (search) {
+      query.set('search', search);
+    }
+    return apiRequest<ProjectSummary[]>(`${projectsPath(orgId)}?${query.toString()}`);
+  },
 
   get: (orgId: string, projectId: string) =>
     apiRequest<ProjectSummary>(`${projectsPath(orgId)}/${projectId}`),
@@ -371,4 +377,28 @@ export const notificationApi = {
     apiRequest<{ updated: number }>('/notifications/read-all', {
       method: 'POST',
     }),
+};
+
+export interface TaskSearchParams extends TaskFilters {
+  q: string;
+  page: number;
+  pageSize: number;
+  sortBy: 'relevance' | 'createdAt' | 'dueDate' | 'priority' | 'title';
+  sortOrder: 'asc' | 'desc';
+}
+
+export const searchApi = {
+  /** Full-text search over one project's tasks, combined with the usual filters. */
+  tasks: (orgId: string, projectId: string, params: TaskSearchParams) => {
+    const { q, page, pageSize, sortBy, sortOrder, ...filters } = params;
+    const query = new URLSearchParams(filtersToQuery(filters));
+    query.set('q', q);
+    query.set('page', String(page));
+    query.set('pageSize', String(pageSize));
+    query.set('sortBy', sortBy);
+    query.set('sortOrder', sortOrder);
+    return apiRequest<Paginated<SearchedTask>>(
+      `${projectsPath(orgId)}/${projectId}/search/tasks?${query.toString()}`,
+    );
+  },
 };

@@ -173,6 +173,41 @@ describe('ProjectsService', () => {
       );
     });
 
+    it('search matches name or description case-insensitively, ANDed with visibility', async () => {
+      await service.findAllVisible(
+        orgId,
+        MembershipRole.MEMBER,
+        userId,
+        ProjectStatus.ACTIVE,
+        'apollo',
+      );
+
+      const where = prisma.project.findMany.mock.calls[0][0].where;
+      expect(where.OR).toEqual([
+        { name: { contains: 'apollo', mode: 'insensitive' } },
+        { description: { contains: 'apollo', mode: 'insensitive' } },
+      ]);
+      // The membership restriction is still there next to the search.
+      expect(where.memberships).toEqual({ some: { userId } });
+      expect(where.organizationId).toBe(orgId);
+    });
+
+    it('escapes LIKE wildcards in the search text and adds no filter without search', async () => {
+      await service.findAllVisible(
+        orgId,
+        MembershipRole.ADMIN,
+        userId,
+        ProjectStatus.ACTIVE,
+        '100%_done',
+      );
+      expect(
+        prisma.project.findMany.mock.calls[0][0].where.OR[0].name.contains,
+      ).toBe('100\\%\\_done');
+
+      await service.findAllVisible(orgId, MembershipRole.ADMIN, userId);
+      expect(prisma.project.findMany.mock.calls[1][0].where.OR).toBeUndefined();
+    });
+
     it('flattens the member count and the requester role into the summary', async () => {
       prisma.project.findMany.mockResolvedValue([
         {

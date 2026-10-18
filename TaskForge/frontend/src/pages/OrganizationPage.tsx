@@ -4,6 +4,7 @@ import { EmptyState, ErrorBox, FormError, Loading } from '../components/Feedback
 import { FormField } from '../components/FormField';
 import { useOrganization } from '../hooks/useOrganizations';
 import { useCreateProject, useProjects } from '../hooks/useProjects';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import type { ProjectStatus } from '../types/api';
 
 const plural = (count: number, word: string) =>
@@ -22,7 +23,10 @@ export default function OrganizationPage() {
   const { organization, isError: orgsFailed, error: orgsError } =
     useOrganization(orgId);
   const [status, setStatus] = useState<ProjectStatus>('ACTIVE');
-  const projects = useProjects(orgId, status);
+  const [search, setSearch] = useState('');
+  // Wait for a pause in typing before asking the server (see the hook).
+  const debouncedSearch = useDebouncedValue(search.trim(), 300);
+  const projects = useProjects(orgId, status, debouncedSearch || undefined);
   const createProject = useCreateProject(orgId);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -71,6 +75,18 @@ export default function OrganizationPage() {
           </div>
         </div>
 
+        <div className="field project-search">
+          <label htmlFor="project-search">Search projects</label>
+          <input
+            id="project-search"
+            type="search"
+            value={search}
+            maxLength={100}
+            placeholder="Name or description"
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </div>
+
         {projects.isError && (
           <ErrorBox
             error={projects.error}
@@ -82,12 +98,16 @@ export default function OrganizationPage() {
         {projects.data?.length === 0 && (
           <EmptyState
             title={
-              status === 'ACTIVE'
-                ? 'No projects you can see yet.'
-                : 'No archived projects.'
+              debouncedSearch
+                ? `No projects match "${debouncedSearch}".`
+                : status === 'ACTIVE'
+                  ? 'No projects you can see yet.'
+                  : 'No archived projects.'
             }
           >
-            {status === 'ACTIVE'
+            {debouncedSearch
+              ? 'Try different words.'
+              : status === 'ACTIVE'
               ? 'Projects are private to their members. Create one below, or ask a project lead to add you.'
               : 'Archived projects appear here.'}
           </EmptyState>
