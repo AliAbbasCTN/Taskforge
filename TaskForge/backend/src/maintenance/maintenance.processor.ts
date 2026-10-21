@@ -56,9 +56,7 @@ export class MaintenanceProcessor extends WorkerHost {
   async purgeOldNotifications(
     now: Date = new Date(),
   ): Promise<{ deleted: number }> {
-    const cutoff = new Date(
-      now.getTime() - NOTIFICATION_RETENTION_DAYS * DAY_MS,
-    );
+    const cutoff = new Date(now.getTime() - NOTIFICATION_RETENTION_DAYS * DAY_MS);
 
     const { count } = await this.prisma.notification.deleteMany({
       // `lt` on a NULL readAt is never true, so unread notifications are

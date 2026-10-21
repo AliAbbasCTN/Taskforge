@@ -43,17 +43,14 @@ describe('validateFile', () => {
     ['a.docx', ZIP, ALLOWED_FILE_TYPES.docx.mimeType],
     ['a.xlsx', ZIP, ALLOWED_FILE_TYPES.xlsx.mimeType],
     ['a.pptx', ZIP, ALLOWED_FILE_TYPES.pptx.mimeType],
-  ])(
-    'accepts %s and reports the SERVER-decided MIME type',
-    (name, data, mime) => {
-      const result = validateFile(name, data);
-      expect(result).toEqual({
-        ok: true,
-        extension: name.split('.').pop()!.toLowerCase(),
-        mimeType: mime,
-      });
-    },
-  );
+  ])('accepts %s and reports the SERVER-decided MIME type', (name, data, mime) => {
+    const result = validateFile(name, data);
+    expect(result).toEqual({
+      ok: true,
+      extension: name.split('.').pop()!.toLowerCase(),
+      mimeType: mime,
+    });
+  });
 
   it('rejects an empty file', () => {
     expect(validateFile('a.txt', Buffer.alloc(0))).toEqual({
@@ -62,19 +59,13 @@ describe('validateFile', () => {
     });
   });
 
-  it.each([
-    'run.exe',
-    'page.html',
-    'logo.svg',
-    'x.js',
-    'x.sh',
-    'a.zip',
-    'noext',
-    '.png',
-  ])('rejects the disallowed or missing extension %s', (name) => {
-    const result = validateFile(name, PNG);
-    expect(result.ok).toBe(false);
-  });
+  it.each(['run.exe', 'page.html', 'logo.svg', 'x.js', 'x.sh', 'a.zip', 'noext', '.png'])(
+    'rejects the disallowed or missing extension %s',
+    (name) => {
+      const result = validateFile(name, PNG);
+      expect(result.ok).toBe(false);
+    },
+  );
 
   it('rejects a file whose bytes do not match its extension (a renamed file)', () => {
     const script = Buffer.from('<script>alert(1)</script>');
@@ -85,11 +76,7 @@ describe('validateFile', () => {
   });
 
   it('does not accept a RIFF file that is not WebP', () => {
-    const wav = Buffer.concat([
-      Buffer.from('RIFF'),
-      Buffer.from([1, 2, 3, 4]),
-      Buffer.from('WAVEfmt '),
-    ]);
+    const wav = Buffer.concat([Buffer.from('RIFF'), Buffer.from([1, 2, 3, 4]), Buffer.from('WAVEfmt ')]);
     expect(validateFile('a.webp', wav).ok).toBe(false);
   });
 
@@ -99,12 +86,8 @@ describe('validateFile', () => {
   });
 
   it('rejects a binary disguised as .txt', () => {
-    expect(validateFile('a.txt', Buffer.from([0x68, 0x00, 0x69])).ok).toBe(
-      false,
-    );
-    expect(validateFile('a.csv', Buffer.from([0xff, 0xfe, 0xfd])).ok).toBe(
-      false,
-    );
+    expect(validateFile('a.txt', Buffer.from([0x68, 0x00, 0x69])).ok).toBe(false);
+    expect(validateFile('a.csv', Buffer.from([0xff, 0xfe, 0xfd])).ok).toBe(false);
   });
 });
 

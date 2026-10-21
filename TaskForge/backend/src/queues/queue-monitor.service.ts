@@ -50,10 +50,7 @@ export class QueueMonitorService {
   async snapshot(): Promise<QueueSnapshot> {
     try {
       const [notifications, maintenance] = await withTimeout(
-        Promise.all([
-          this.counts(this.notifications),
-          this.counts(this.maintenance),
-        ]),
+        Promise.all([this.counts(this.notifications), this.counts(this.maintenance)]),
         SNAPSHOT_TIMEOUT_MS,
         'Queue snapshot',
       );
@@ -64,12 +61,7 @@ export class QueueMonitorService {
   }
 
   private async counts(queue: Queue): Promise<QueueCounts> {
-    const counts = await queue.getJobCounts(
-      'waiting',
-      'active',
-      'delayed',
-      'failed',
-    );
+    const counts = await queue.getJobCounts('waiting', 'active', 'delayed', 'failed');
     return {
       waiting: counts.waiting ?? 0,
       active: counts.active ?? 0,

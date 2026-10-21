@@ -1,3 +1,11 @@
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiEndpoint, BEARER_AUTH_NAME } from '../common/swagger';
+import {
+  BoardDetailResponse,
+  BoardResponse,
+  BoardSummaryResponse,
+  BoardWithColumnsResponse,
+} from '../docs/models';
 import {
   Body,
   Controller,
@@ -49,6 +57,8 @@ import { LogsActivity } from '../activity/activity.decorator';
  * Nest runs controller-level guards before method-level ones, so reads need
  * no extra decoration and writes can only add checks, never skip any.
  */
+@ApiTags('Boards')
+@ApiBearerAuth(BEARER_AUTH_NAME)
 @PublishesChanges('boards')
 @Controller('organizations/:id/projects/:projectId/boards')
 @UseGuards(JwtAuthGuard, OrganizationMembershipGuard, ProjectGuard)
@@ -59,6 +69,12 @@ export class BoardsController {
   @LogsActivity('board.created')
   @RequirePermission(Permission.ProjectBoardsManage)
   @UseGuards(ProjectPermissionGuard, ProjectActiveGuard)
+  @ApiEndpoint({
+    summary: 'Create a board',
+    description: 'New boards start with three columns: To Do, In Progress and Done.',
+    created: BoardWithColumnsResponse,
+    conflict: 'The project is archived (read-only).',
+  })
   create(
     @Param('projectId', ParseUUIDPipe) projectId: string,
     @Body() dto: CreateBoardDto,
@@ -67,12 +83,21 @@ export class BoardsController {
   }
 
   @Get()
+  @ApiEndpoint({
+    summary: 'List a project\'s boards',
+    ok: [BoardSummaryResponse],
+  })
   findAll(@Param('projectId', ParseUUIDPipe) projectId: string) {
     return this.boardsService.findAll(projectId);
   }
 
   @Get(':boardId')
   @UseGuards(BoardGuard)
+  @ApiEndpoint({
+    summary: 'Get the board view',
+    description: 'The whole kanban board in one call: columns in order, each with its tasks in order, with assignees and labels. Accepts the task filters `priority`, `assigneeId`, `labelId` and `overdue`; columns are always returned, only their tasks are filtered.',
+    ok: BoardDetailResponse,
+  })
   findOne(
     @Param('boardId', ParseUUIDPipe) boardId: string,
     @Query() filter: TaskFilterDto,
@@ -84,6 +109,11 @@ export class BoardsController {
   @LogsActivity('board.updated')
   @RequirePermission(Permission.ProjectBoardsManage)
   @UseGuards(BoardGuard, ProjectPermissionGuard, ProjectActiveGuard)
+  @ApiEndpoint({
+    summary: 'Rename a board',
+    ok: BoardResponse,
+    conflict: 'The project is archived (read-only).',
+  })
   update(
     @Param('boardId', ParseUUIDPipe) boardId: string,
     @Body() dto: UpdateBoardDto,
@@ -96,6 +126,12 @@ export class BoardsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermission(Permission.ProjectBoardsManage)
   @UseGuards(BoardGuard, ProjectPermissionGuard, ProjectActiveGuard)
+  @ApiEndpoint({
+    summary: 'Delete a board',
+    description: '**Irreversible.** Also deletes the board\'s columns and tasks.',
+    noContent: 'Board deleted.',
+    conflict: 'The project is archived (read-only).',
+  })
   remove(@Param('boardId', ParseUUIDPipe) boardId: string) {
     return this.boardsService.remove(boardId);
   }

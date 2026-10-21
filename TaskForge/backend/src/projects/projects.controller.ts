@@ -1,3 +1,10 @@
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiEndpoint, BEARER_AUTH_NAME } from '../common/swagger';
+import {
+  ProjectMemberResponse,
+  ProjectResponse,
+  ProjectSummaryResponse,
+} from '../docs/models';
 import {
   Body,
   Controller,
@@ -71,6 +78,8 @@ import { LogsActivity } from '../activity/activity.decorator';
  * `:organizationId`): `OrganizationMembershipGuard` reads `request.params.id`,
  * so the same guard class works on every organization-nested controller.
  */
+@ApiTags('Projects')
+@ApiBearerAuth(BEARER_AUTH_NAME)
 @PublishesChanges('project')
 @Controller('organizations/:id/projects')
 @UseGuards(JwtAuthGuard, OrganizationMembershipGuard)
@@ -79,6 +88,11 @@ export class ProjectsController {
 
   @Post()
   @LogsActivity('project.created')
+  @ApiEndpoint({
+    summary: 'Create a project',
+    description: 'Any organization member can create a project and becomes its LEAD. Projects are PRIVATE: only project members and organization ADMIN/MANAGERs can see them.',
+    created: ProjectResponse,
+  })
   create(
     @Param('id', ParseUUIDPipe) organizationId: string,
     @Body() dto: CreateProjectDto,
@@ -88,6 +102,11 @@ export class ProjectsController {
   }
 
   @Get()
+  @ApiEndpoint({
+    summary: 'List projects you can see',
+    description: 'Project members see their projects; organization ADMIN/MANAGERs see all. Defaults to ACTIVE projects; pass `status=ARCHIVED` for archived ones. Not paginated.',
+    ok: [ProjectSummaryResponse],
+  })
   findAll(
     @Param('id', ParseUUIDPipe) organizationId: string,
     @Query() query: ListProjectsQueryDto,
@@ -105,6 +124,10 @@ export class ProjectsController {
 
   @Get(':projectId')
   @UseGuards(ProjectGuard)
+  @ApiEndpoint({
+    summary: 'Get a project',
+    ok: ProjectSummaryResponse,
+  })
   findOne(
     @Param('projectId', ParseUUIDPipe) projectId: string,
     @CurrentUser() user: AuthenticatedUser,
@@ -116,6 +139,12 @@ export class ProjectsController {
   @LogsActivity('project.updated')
   @RequirePermission(Permission.ProjectManage)
   @UseGuards(ProjectGuard, ProjectPermissionGuard)
+  @ApiEndpoint({
+    summary: 'Edit a project',
+    description: 'Send at least one of `name` and `description`.',
+    ok: ProjectResponse,
+    conflict: 'The project is archived (read-only).',
+  })
   update(
     @Param('projectId', ParseUUIDPipe) projectId: string,
     @Body() dto: UpdateProjectDto,
@@ -128,6 +157,12 @@ export class ProjectsController {
   @HttpCode(HttpStatus.OK)
   @RequirePermission(Permission.ProjectManage)
   @UseGuards(ProjectGuard, ProjectPermissionGuard)
+  @ApiEndpoint({
+    summary: 'Archive a project',
+    description: 'A reversible "put away": the project keeps all its data but becomes read-only.',
+    ok: ProjectResponse,
+    conflict: 'The project is already archived.',
+  })
   archive(@Param('projectId', ParseUUIDPipe) projectId: string) {
     return this.projectsService.archive(projectId);
   }
@@ -137,6 +172,11 @@ export class ProjectsController {
   @HttpCode(HttpStatus.OK)
   @RequirePermission(Permission.ProjectManage)
   @UseGuards(ProjectGuard, ProjectPermissionGuard)
+  @ApiEndpoint({
+    summary: 'Unarchive a project',
+    ok: ProjectResponse,
+    conflict: 'The project is not archived.',
+  })
   unarchive(@Param('projectId', ParseUUIDPipe) projectId: string) {
     return this.projectsService.unarchive(projectId);
   }
@@ -146,12 +186,22 @@ export class ProjectsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermission(Permission.ProjectManage)
   @UseGuards(ProjectGuard, ProjectPermissionGuard)
+  @ApiEndpoint({
+    summary: 'Delete a project permanently',
+    description: '**Irreversible.** Only ARCHIVED projects can be deleted: archiving first is the safety step. Cascades to boards, tasks, comments and attachments.',
+    noContent: 'Project deleted.',
+    conflict: 'The project is not archived. Archive it first.',
+  })
   remove(@Param('projectId', ParseUUIDPipe) projectId: string) {
     return this.projectsService.remove(projectId);
   }
 
   @Get(':projectId/members')
   @UseGuards(ProjectGuard)
+  @ApiEndpoint({
+    summary: 'List project members',
+    ok: [ProjectMemberResponse],
+  })
   listMembers(@Param('projectId', ParseUUIDPipe) projectId: string) {
     return this.projectsService.listMembers(projectId);
   }
@@ -160,6 +210,14 @@ export class ProjectsController {
   @LogsActivity('project.member_added')
   @RequirePermission(Permission.ProjectMembersManage)
   @UseGuards(ProjectGuard, ProjectPermissionGuard)
+  @ApiEndpoint({
+    summary: 'Add a project member',
+    description: 'The user must already be a member of the organization. The added user is notified.',
+    created: ProjectMemberResponse,
+    notFound: 'No user is registered with that email address.',
+    conflict: 'Already a member of the project, or the project is archived.',
+    unprocessable: 'The user is not a member of the organization.',
+  })
   addMember(
     @Param('id', ParseUUIDPipe) organizationId: string,
     @Param('projectId', ParseUUIDPipe) projectId: string,
@@ -178,6 +236,12 @@ export class ProjectsController {
   @LogsActivity('project.member_role_changed')
   @RequirePermission(Permission.ProjectMembersManage)
   @UseGuards(ProjectGuard, ProjectPermissionGuard)
+  @ApiEndpoint({
+    summary: 'Change a project member\'s role',
+    ok: ProjectMemberResponse,
+    notFound: 'That user is not a member of this project.',
+    conflict: 'Would demote the last remaining LEAD, or the project is archived.',
+  })
   updateMemberRole(
     @Param('projectId', ParseUUIDPipe) projectId: string,
     @Param('userId', ParseUUIDPipe) userId: string,
@@ -194,6 +258,13 @@ export class ProjectsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermission(Permission.ProjectMembersManage)
   @UseGuards(ProjectGuard, ProjectPermissionGuard)
+  @ApiEndpoint({
+    summary: 'Remove a project member',
+    description: 'Also closes that person\'s live connection to the project.',
+    noContent: 'Member removed.',
+    notFound: 'That user is not a member of this project.',
+    conflict: 'Would remove the last remaining LEAD, or the project is archived.',
+  })
   removeMember(
     @Param('projectId', ParseUUIDPipe) projectId: string,
     @Param('userId', ParseUUIDPipe) userId: string,

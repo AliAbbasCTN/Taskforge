@@ -1,3 +1,8 @@
+import { ApiServiceUnavailableResponse, ApiTags } from '@nestjs/swagger';
+import { ApiEndpoint } from '../common/swagger';
+import {
+  HealthResponse,
+} from '../docs/models';
 import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
@@ -24,6 +29,7 @@ import { QueueMonitorService } from '../queues/queue-monitor.service';
  * HOW: `SELECT 1` is the cheapest possible query that proves a working
  * round-trip to PostgreSQL. It touches no tables and returns immediately.
  */
+@ApiTags('Health')
 @Controller('health')
 export class HealthController {
   constructor(
@@ -33,6 +39,15 @@ export class HealthController {
   ) {}
 
   @Get()
+  @ApiEndpoint({
+    summary: 'Check service health',
+    description: 'Reports whether the API and its dependencies work. Public: no token needed, so load balancers and container orchestrators can poll it. Returns **503** when the database is down; **200** with status `degraded` when only Redis is down.',
+    ok: HealthResponse,
+  })
+  @ApiServiceUnavailableResponse({
+    description: 'The database is unreachable (`status` is `error`).',
+    type: HealthResponse,
+  })
   async check(@Res({ passthrough: true }) res: Response) {
     const [databaseStatus, queues] = await Promise.all([
       this.checkDatabase(),

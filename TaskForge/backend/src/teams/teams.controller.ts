@@ -1,3 +1,9 @@
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiEndpoint, BEARER_AUTH_NAME } from '../common/swagger';
+import {
+  TeamMemberResponse,
+  TeamResponse,
+} from '../docs/models';
 import {
   Body,
   Controller,
@@ -63,12 +69,19 @@ import { UpdateTeamMemberRoleDto } from './dto/update-team-member-role.dto';
  * `request.params.id` directly. Keeping the same param name here means the
  * exact same guard class works on both controllers with zero changes.
  */
+@ApiTags('Teams')
+@ApiBearerAuth(BEARER_AUTH_NAME)
 @Controller('organizations/:id/teams')
 @UseGuards(JwtAuthGuard, OrganizationMembershipGuard)
 export class TeamsController {
   constructor(private readonly teamsService: TeamsService) {}
 
   @Post()
+  @ApiEndpoint({
+    summary: 'Create a team',
+    description: 'Any organization member can create a team and becomes its LEAD.',
+    created: TeamResponse,
+  })
   create(
     @Param('id', ParseUUIDPipe) organizationId: string,
     @Body() dto: CreateTeamDto,
@@ -78,12 +91,21 @@ export class TeamsController {
   }
 
   @Get()
+  @ApiEndpoint({
+    summary: 'List teams',
+    description: 'Teams are visible to every member of the organization.',
+    ok: [TeamResponse],
+  })
   findAll(@Param('id', ParseUUIDPipe) organizationId: string) {
     return this.teamsService.findAllForOrg(organizationId);
   }
 
   @Get(':teamId')
   @UseGuards(TeamGuard)
+  @ApiEndpoint({
+    summary: 'Get a team',
+    ok: TeamResponse,
+  })
   findOne(@Param('teamId', ParseUUIDPipe) teamId: string) {
     return this.teamsService.findOne(teamId);
   }
@@ -91,6 +113,10 @@ export class TeamsController {
   @Patch(':teamId')
   @RequirePermission(Permission.TeamManage)
   @UseGuards(TeamGuard, TeamPermissionGuard)
+  @ApiEndpoint({
+    summary: 'Rename a team',
+    ok: TeamResponse,
+  })
   update(
     @Param('teamId', ParseUUIDPipe) teamId: string,
     @Body() dto: UpdateTeamDto,
@@ -102,12 +128,20 @@ export class TeamsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermission(Permission.TeamManage)
   @UseGuards(TeamGuard, TeamPermissionGuard)
+  @ApiEndpoint({
+    summary: 'Delete a team',
+    noContent: 'Team deleted.',
+  })
   remove(@Param('teamId', ParseUUIDPipe) teamId: string) {
     return this.teamsService.remove(teamId);
   }
 
   @Get(':teamId/members')
   @UseGuards(TeamGuard)
+  @ApiEndpoint({
+    summary: 'List team members',
+    ok: [TeamMemberResponse],
+  })
   listMembers(@Param('teamId', ParseUUIDPipe) teamId: string) {
     return this.teamsService.listMembers(teamId);
   }
@@ -115,6 +149,14 @@ export class TeamsController {
   @Post(':teamId/members')
   @RequirePermission(Permission.TeamMembersManage)
   @UseGuards(TeamGuard, TeamPermissionGuard)
+  @ApiEndpoint({
+    summary: 'Add a team member',
+    description: 'The user must already be a member of the organization.',
+    created: TeamMemberResponse,
+    notFound: 'No user is registered with that email address.',
+    conflict: 'Already a member of the team.',
+    unprocessable: 'The user is not a member of the organization.',
+  })
   addMember(
     @Param('id', ParseUUIDPipe) organizationId: string,
     @Param('teamId', ParseUUIDPipe) teamId: string,
@@ -126,6 +168,12 @@ export class TeamsController {
   @Patch(':teamId/members/:userId')
   @RequirePermission(Permission.TeamMembersManage)
   @UseGuards(TeamGuard, TeamPermissionGuard)
+  @ApiEndpoint({
+    summary: 'Change a team member\'s role',
+    ok: TeamMemberResponse,
+    notFound: 'That user is not a member of this team.',
+    conflict: 'Would demote the last remaining LEAD.',
+  })
   updateMemberRole(
     @Param('teamId', ParseUUIDPipe) teamId: string,
     @Param('userId', ParseUUIDPipe) userId: string,
@@ -138,6 +186,12 @@ export class TeamsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermission(Permission.TeamMembersManage)
   @UseGuards(TeamGuard, TeamPermissionGuard)
+  @ApiEndpoint({
+    summary: 'Remove a team member',
+    noContent: 'Member removed.',
+    notFound: 'That user is not a member of this team.',
+    conflict: 'Would remove the last remaining LEAD.',
+  })
   removeMember(
     @Param('teamId', ParseUUIDPipe) teamId: string,
     @Param('userId', ParseUUIDPipe) userId: string,

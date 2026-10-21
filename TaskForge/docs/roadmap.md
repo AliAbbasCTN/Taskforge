@@ -20,7 +20,7 @@ Each phase is additive: it builds on every previous phase without breaking it, a
 | 13 | File Uploads | Local storage (dev), S3 architecture (prod) |
 | 14 | Search & Filtering | PostgreSQL full-text search, sorting, pagination |
 | 15 | Activity Logs & Audit Trail | Action history across the platform |
-| 16 | Swagger / API Docs | Full OpenAPI documentation |
+| 16 | Swagger / API Docs | Full OpenAPI documentation ✅ |
 | 17 | Testing | Unit, integration, and E2E test suites |
 | 18 | Docker | Backend/frontend Dockerfiles, Docker Compose |
 | 19 | CI/CD | GitHub Actions pipeline |

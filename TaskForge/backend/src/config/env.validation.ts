@@ -46,6 +46,16 @@ class EnvironmentVariables {
   CORS_ORIGIN?: string;
 
   /**
+   * Whether to serve the interactive API reference (/docs). When omitted it is
+   * on outside production and off in production - see configuration.ts.
+   */
+  @IsOptional()
+  @IsIn(['true', 'false'], {
+    message: 'SWAGGER_ENABLED must be "true" or "false"',
+  })
+  SWAGGER_ENABLED?: string;
+
+  /**
    * Required. Without a database connection string the application cannot
    * function at all, so this is the one variable that has no default and
    * must be supplied.
@@ -120,7 +130,10 @@ class EnvironmentVariables {
   S3_REGION?: string;
 
   @IsOptional()
-  @IsUrl({ require_tld: false }, { message: 'S3_ENDPOINT must be a valid URL' })
+  @IsUrl(
+    { require_tld: false },
+    { message: 'S3_ENDPOINT must be a valid URL' },
+  )
   S3_ENDPOINT?: string;
 
   @IsOptional()

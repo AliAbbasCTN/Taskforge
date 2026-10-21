@@ -30,9 +30,7 @@ describe('RealtimeAccessService.canAccessProject', () => {
   it('denies a project that does not exist, without querying memberships', async () => {
     prisma.project.findUnique.mockResolvedValue(null);
 
-    await expect(service.canAccessProject(userId, projectId)).resolves.toBe(
-      false,
-    );
+    await expect(service.canAccessProject(userId, projectId)).resolves.toBe(false);
     expect(prisma.membership.findUnique).not.toHaveBeenCalled();
   });
 
@@ -40,31 +38,21 @@ describe('RealtimeAccessService.canAccessProject', () => {
     prisma.project.findUnique.mockResolvedValue(project(true));
     prisma.membership.findUnique.mockResolvedValue(null);
 
-    await expect(service.canAccessProject(userId, projectId)).resolves.toBe(
-      false,
-    );
+    await expect(service.canAccessProject(userId, projectId)).resolves.toBe(false);
   });
 
   it('allows a project member who is in the organization', async () => {
     prisma.project.findUnique.mockResolvedValue(project(true));
-    prisma.membership.findUnique.mockResolvedValue({
-      role: MembershipRole.MEMBER,
-    });
+    prisma.membership.findUnique.mockResolvedValue({ role: MembershipRole.MEMBER });
 
-    await expect(service.canAccessProject(userId, projectId)).resolves.toBe(
-      true,
-    );
+    await expect(service.canAccessProject(userId, projectId)).resolves.toBe(true);
   });
 
   it('denies a plain org MEMBER who is not on the (private) project', async () => {
     prisma.project.findUnique.mockResolvedValue(project(false));
-    prisma.membership.findUnique.mockResolvedValue({
-      role: MembershipRole.MEMBER,
-    });
+    prisma.membership.findUnique.mockResolvedValue({ role: MembershipRole.MEMBER });
 
-    await expect(service.canAccessProject(userId, projectId)).resolves.toBe(
-      false,
-    );
+    await expect(service.canAccessProject(userId, projectId)).resolves.toBe(false);
   });
 
   it.each([MembershipRole.ADMIN, MembershipRole.MANAGER])(
@@ -73,9 +61,7 @@ describe('RealtimeAccessService.canAccessProject', () => {
       prisma.project.findUnique.mockResolvedValue(project(false));
       prisma.membership.findUnique.mockResolvedValue({ role });
 
-      await expect(service.canAccessProject(userId, projectId)).resolves.toBe(
-        true,
-      );
+      await expect(service.canAccessProject(userId, projectId)).resolves.toBe(true);
     },
   );
 });

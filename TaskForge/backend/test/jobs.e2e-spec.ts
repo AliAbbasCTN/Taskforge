@@ -72,11 +72,7 @@ describe('Background jobs (e2e)', () => {
       .post('/auth/register')
       .send({ email, name, password: 'password1' })
       .expect(201);
-    return {
-      id: res.body.user.id as string,
-      email,
-      token: res.body.tokens.accessToken as string,
-    };
+    return { id: res.body.user.id as string, email, token: res.body.tokens.accessToken as string };
   }
 
   /** A lead who owns a project with one member and one board; inboxes start empty. */
@@ -120,21 +116,12 @@ describe('Background jobs (e2e)', () => {
 
     const assignTask = (title = 'Fix login') =>
       api()
-        .post(
-          `/organizations/${orgId}/projects/${projectId}/boards/${board.id}/tasks`,
-        )
+        .post(`/organizations/${orgId}/projects/${projectId}/boards/${board.id}/tasks`)
         .set('Authorization', bearer(lead.token))
         .send({ columnId: board.columns[0].id, title, assigneeId: member.id })
         .expect(201);
 
-    return {
-      lead,
-      member,
-      orgId,
-      projectId,
-      boardId: board.id as string,
-      assignTask,
-    };
+    return { lead, member, orgId, projectId, boardId: board.id as string, assignTask };
   }
 
   describe('notification delivery', () => {
@@ -205,8 +192,7 @@ describe('Background jobs (e2e)', () => {
   describe('maintenance', () => {
     it('purges notifications read more than 90 days ago, keeping recent and unread ones', async () => {
       const w = await world();
-      const days = (n: number) =>
-        new Date(Date.now() - n * 24 * 60 * 60 * 1000);
+      const days = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
       const make = (message: string, readAt: Date | null, createdAt: Date) =>
         prisma.notification.create({
           data: {

@@ -68,7 +68,7 @@ describe('RealtimeService', () => {
       expect(socket.leave).toHaveBeenCalledWith('project:revoked');
     });
 
-    it("revalidateUser covers every one of the user's sockets (all tabs and devices)", async () => {
+    it('revalidateUser covers every one of the user\'s sockets (all tabs and devices)', async () => {
       const tab1 = fakeSocket(['project:p']);
       const tab2 = fakeSocket(['project:p']);
       fetchSockets.mockResolvedValue([tab1, tab2]);

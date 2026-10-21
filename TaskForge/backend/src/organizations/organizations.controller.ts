@@ -1,3 +1,10 @@
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiEndpoint, BEARER_AUTH_NAME } from '../common/swagger';
+import {
+  OrganizationMemberResponse,
+  OrganizationResponse,
+  OrganizationWithRoleResponse,
+} from '../docs/models';
 import {
   Body,
   Controller,
@@ -67,6 +74,8 @@ import { LogsActivity } from '../activity/activity.decorator';
  * a member, including removing themselves (subject to the "can't remove
  * the last admin" rule in the service).
  */
+@ApiTags('Organizations')
+@ApiBearerAuth(BEARER_AUTH_NAME)
 @Controller('organizations')
 @UseGuards(JwtAuthGuard)
 export class OrganizationsController {
@@ -74,6 +83,11 @@ export class OrganizationsController {
 
   @Post()
   @LogsActivity('organization.created')
+  @ApiEndpoint({
+    summary: 'Create an organization',
+    description: 'Creates a new tenant and makes you its ADMIN. The slug is derived from the name.',
+    created: OrganizationWithRoleResponse,
+  })
   create(
     @Body() dto: CreateOrganizationDto,
     @CurrentUser() user: AuthenticatedUser,
@@ -82,12 +96,21 @@ export class OrganizationsController {
   }
 
   @Get()
+  @ApiEndpoint({
+    summary: 'List your organizations',
+    description: 'Only organizations you belong to, each with YOUR role in it. This is what an organization switcher shows.',
+    ok: [OrganizationWithRoleResponse],
+  })
   findAllForUser(@CurrentUser() user: AuthenticatedUser) {
     return this.organizationsService.findAllForUser(user.id);
   }
 
   @Get(':id')
   @UseGuards(OrganizationMembershipGuard)
+  @ApiEndpoint({
+    summary: 'Get an organization',
+    ok: OrganizationWithRoleResponse,
+  })
   async findOne(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentMembership() membership: RequestMembership,
@@ -100,6 +123,10 @@ export class OrganizationsController {
   @LogsActivity('organization.updated')
   @RequirePermission(Permission.OrganizationManage)
   @UseGuards(OrganizationMembershipGuard, OrganizationPermissionGuard)
+  @ApiEndpoint({
+    summary: 'Rename an organization',
+    ok: OrganizationResponse,
+  })
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateOrganizationDto,
@@ -109,6 +136,11 @@ export class OrganizationsController {
 
   @Get(':id/members')
   @UseGuards(OrganizationMembershipGuard)
+  @ApiEndpoint({
+    summary: 'List organization members',
+    description: 'Any member can see who else is in the organization.',
+    ok: [OrganizationMemberResponse],
+  })
   listMembers(@Param('id', ParseUUIDPipe) id: string) {
     return this.organizationsService.listMembers(id);
   }
@@ -117,6 +149,13 @@ export class OrganizationsController {
   @LogsActivity('organization.member_added')
   @RequirePermission(Permission.OrganizationMembersManage)
   @UseGuards(OrganizationMembershipGuard, OrganizationPermissionGuard)
+  @ApiEndpoint({
+    summary: 'Add a member',
+    description: 'Adds an EXISTING TaskForge user by email (default role MEMBER). It does not send an invitation or create an account.',
+    created: OrganizationMemberResponse,
+    notFound: 'No user is registered with that email address.',
+    conflict: 'That user is already a member.',
+  })
   addMember(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AddMemberDto) {
     return this.organizationsService.addMember(id, dto);
   }
@@ -128,6 +167,12 @@ export class OrganizationsController {
   @RevalidatesUserRooms()
   @RequirePermission(Permission.OrganizationMembersManage)
   @UseGuards(OrganizationMembershipGuard, OrganizationPermissionGuard)
+  @ApiEndpoint({
+    summary: 'Change a member\'s role',
+    ok: OrganizationMemberResponse,
+    notFound: 'That user is not a member of this organization.',
+    conflict: 'Would demote the last remaining ADMIN.',
+  })
   updateMemberRole(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('userId', ParseUUIDPipe) userId: string,
@@ -142,6 +187,13 @@ export class OrganizationsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermission(Permission.OrganizationMembersManage)
   @UseGuards(OrganizationMembershipGuard, OrganizationPermissionGuard)
+  @ApiEndpoint({
+    summary: 'Remove a member',
+    description: 'Also closes that person\'s live connections to the organization\'s projects.',
+    noContent: 'Member removed.',
+    notFound: 'That user is not a member of this organization.',
+    conflict: 'Would remove the last remaining ADMIN.',
+  })
   removeMember(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('userId', ParseUUIDPipe) userId: string,

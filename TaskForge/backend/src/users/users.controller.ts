@@ -1,3 +1,12 @@
+import { ApiBearerAuth, ApiForbiddenResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiEndpoint,
+  BEARER_AUTH_NAME,
+  ErrorResponseDto,
+} from '../common/swagger';
+import {
+  UserResponse,
+} from '../docs/models';
 import {
   Controller,
   Delete,
@@ -45,12 +54,20 @@ import { UsersService } from './users.service';
  *   their OWN account. Full role-based authorization (so an admin could
  *   manage other users) arrives with RBAC in Phase 06.
  */
+@ApiTags('Users')
+@ApiBearerAuth(BEARER_AUTH_NAME)
 @Controller('users')
 @UseGuards(JwtAuthGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get(':id')
+  @ApiEndpoint({
+    summary: 'Get a user',
+    description: 'You can read your own profile, or the profile of someone who shares at least one organization with you.',
+    ok: UserResponse,
+    notFound: 'No such user, or you share no organization with them (the same answer for both, so ids cannot be probed).',
+  })
   findOne(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() currentUser: AuthenticatedUser,
@@ -59,6 +76,16 @@ export class UsersController {
   }
 
   @Patch(':id')
+  @ApiEndpoint({
+    summary: 'Update your profile',
+    description: 'Only your own account. Changing the email is deliberately not supported.',
+    ok: UserResponse,
+    notFound: 'No such user.',
+  })
+  @ApiForbiddenResponse({
+    description: 'You tried to modify someone else\'s account.',
+    type: ErrorResponseDto,
+  })
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateUserDto,
@@ -70,6 +97,16 @@ export class UsersController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiEndpoint({
+    summary: 'Delete your account',
+    description: 'Permanently deletes your own account. Your memberships are removed; comments and attachments you wrote stay, with the author shown as deleted.',
+    noContent: 'Account deleted.',
+    notFound: 'No such user.',
+  })
+  @ApiForbiddenResponse({
+    description: 'You tried to delete someone else\'s account.',
+    type: ErrorResponseDto,
+  })
   remove(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() currentUser: AuthenticatedUser,

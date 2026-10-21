@@ -5,6 +5,7 @@ import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { createAppValidationPipe } from './common/pipes/app-validation.pipe';
 import { SocketIoAdapter } from './realtime/socket-io.adapter';
+import { DOCS_PATH, setupSwagger } from './docs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -39,6 +40,14 @@ async function bootstrap() {
   socketAdapter.connectToRedis();
   app.useWebSocketAdapter(socketAdapter);
 
+  // The interactive API reference (Phase 16). Built from the controllers and
+  // DTOs themselves, so it cannot describe a route that does not exist. Off in
+  // production unless SWAGGER_ENABLED=true - see config/configuration.ts.
+  const docsEnabled = setupSwagger(
+    app,
+    configService.get<boolean>('swagger.enabled') ?? false,
+  );
+
   // Lets NestJS run module shutdown hooks (including closing the Prisma
   // connection pool) when the process receives SIGTERM/SIGINT, instead of
   // dropping in-flight work. This matters once we run in containers.
@@ -47,6 +56,9 @@ async function bootstrap() {
   const port = configService.get<number>('app.port') ?? 3000;
   await app.listen(port);
   logger.log(`TaskForge backend listening on http://localhost:${port}`);
+  if (docsEnabled) {
+    logger.log(`API reference: http://localhost:${port}/${DOCS_PATH}`);
+  }
 }
 
 bootstrap();

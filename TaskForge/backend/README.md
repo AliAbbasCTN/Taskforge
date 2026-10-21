@@ -2,7 +2,9 @@
 
 A NestJS + TypeScript backend backed by PostgreSQL via Prisma, with JWT authentication, multi-tenant organizations, teams, RBAC, projects, kanban boards with tasks, labels, comments, file attachments, full-text search, an activity feed and audit trail, task filtering, real-time updates, notifications and background jobs.
 
-## What exists (Phase 15)
+## What exists (Phase 16)
+
+- **API reference** (Phase 16): interactive docs at `GET /docs`, raw OpenAPI at `/docs-json` and `/docs-yaml`. Built from the controllers and DTOs, so it always describes the real routes. Enabled outside production; set `SWAGGER_ENABLED=true|false` to override. See `src/docs/` and `docs/phase-16-concepts.md`.
 
 - **Auth:** `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`
 - **Users:** `GET /users/:id` (self, or anyone sharing an organization with you), `PATCH /users/:id`, `DELETE /users/:id`

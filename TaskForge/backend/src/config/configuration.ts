@@ -19,6 +19,15 @@ export default () => ({
   cors: {
     origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   },
+  swagger: {
+    // The interactive API reference at /docs. On by default everywhere except
+    // production, where it must be switched on deliberately - an API map is
+    // useful to attackers too. See docs/phase-16-concepts.md.
+    enabled:
+      process.env.SWAGGER_ENABLED !== undefined
+        ? process.env.SWAGGER_ENABLED === 'true'
+        : (process.env.NODE_ENV || 'development') !== 'production',
+  },
   database: {
     // Prisma reads DATABASE_URL directly from the environment, so this entry
     // is not what configures Prisma. It is exposed here so the rest of the

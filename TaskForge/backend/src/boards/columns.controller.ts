@@ -1,3 +1,8 @@
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiEndpoint, BEARER_AUTH_NAME } from '../common/swagger';
+import {
+  ColumnResponse,
+} from '../docs/models';
 import {
   Body,
   Controller,
@@ -34,6 +39,8 @@ import { UpdateColumnDto } from './dto/update-column.dto';
  *   PATCH  /:columnId   - rename and/or move to `position`
  *   DELETE /:columnId   - delete an EMPTY column (409 if it still has tasks)
  */
+@ApiTags('Columns')
+@ApiBearerAuth(BEARER_AUTH_NAME)
 @PublishesChanges('columns')
 @Controller('organizations/:id/projects/:projectId/boards/:boardId/columns')
 @UseGuards(JwtAuthGuard, OrganizationMembershipGuard, ProjectGuard, BoardGuard)
@@ -43,6 +50,12 @@ export class ColumnsController {
   @Post()
   @RequirePermission(Permission.ProjectBoardsManage)
   @UseGuards(ProjectPermissionGuard, ProjectActiveGuard)
+  @ApiEndpoint({
+    summary: 'Add a column',
+    description: 'Appended at the end unless `position` is given.',
+    created: ColumnResponse,
+    conflict: 'The project is archived (read-only).',
+  })
   create(
     @Param('boardId', ParseUUIDPipe) boardId: string,
     @Body() dto: CreateColumnDto,
@@ -53,6 +66,13 @@ export class ColumnsController {
   @Patch(':columnId')
   @RequirePermission(Permission.ProjectBoardsManage)
   @UseGuards(ProjectPermissionGuard, ProjectActiveGuard)
+  @ApiEndpoint({
+    summary: 'Rename or move a column',
+    description: 'Send `name`, `position` or both.',
+    ok: ColumnResponse,
+    notFound: 'The column is not on this board.',
+    conflict: 'The project is archived (read-only).',
+  })
   update(
     @Param('boardId', ParseUUIDPipe) boardId: string,
     @Param('columnId', ParseUUIDPipe) columnId: string,
@@ -65,6 +85,13 @@ export class ColumnsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermission(Permission.ProjectBoardsManage)
   @UseGuards(ProjectPermissionGuard, ProjectActiveGuard)
+  @ApiEndpoint({
+    summary: 'Delete a column',
+    description: 'Only EMPTY columns can be deleted.',
+    noContent: 'Column deleted.',
+    notFound: 'The column is not on this board.',
+    conflict: 'The column still has tasks, or the project is archived.',
+  })
   remove(
     @Param('boardId', ParseUUIDPipe) boardId: string,
     @Param('columnId', ParseUUIDPipe) columnId: string,

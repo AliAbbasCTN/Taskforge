@@ -1,3 +1,4 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEmail, IsEnum, IsOptional } from 'class-validator';
 import { ProjectRole } from '@prisma/client';
 
@@ -12,9 +13,18 @@ import { ProjectRole } from '@prisma/client';
  */
 export class AddProjectMemberDto {
   @IsEmail()
+  @ApiProperty({
+    example: 'grace@example.com',
+    description: 'Must already be a member of the organization.',
+  })
   email!: string;
 
   @IsOptional()
   @IsEnum(ProjectRole)
+  @ApiPropertyOptional({
+    enum: ProjectRole,
+    enumName: 'ProjectRole',
+    default: ProjectRole.MEMBER,
+  })
   role?: ProjectRole;
 }

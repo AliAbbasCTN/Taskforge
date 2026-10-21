@@ -39,9 +39,7 @@ describe('parseRedisUrl', () => {
 
   it('rejects other protocols and a bad database number', () => {
     expect(() => parseRedisUrl('http://localhost:6379')).toThrow(/protocol/);
-    expect(() => parseRedisUrl('redis://localhost:6379/abc')).toThrow(
-      /database/,
-    );
+    expect(() => parseRedisUrl('redis://localhost:6379/abc')).toThrow(/database/);
     expect(() => parseRedisUrl('not a url')).toThrow();
   });
 });

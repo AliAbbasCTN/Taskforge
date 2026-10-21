@@ -13,11 +13,7 @@ describe('ActivityService', () => {
   let service: ActivityService;
   let prisma: {
     user: { findUnique: jest.Mock };
-    activityLog: {
-      createMany: jest.Mock;
-      count: jest.Mock;
-      findMany: jest.Mock;
-    };
+    activityLog: { createMany: jest.Mock; count: jest.Mock; findMany: jest.Mock };
     $transaction: jest.Mock;
   };
 
@@ -41,20 +37,10 @@ describe('ActivityService', () => {
       expect(prisma.activityLog.createMany).not.toHaveBeenCalled();
     });
 
-    it("stores every entry in ONE insert, with the actor's name copied in", async () => {
+    it('stores every entry in ONE insert, with the actor\'s name copied in', async () => {
       await service.record(ACTOR, [
-        {
-          organizationId: ORG,
-          projectId: PROJECT,
-          action: 'task.created',
-          targetType: 'task',
-          targetName: 'A',
-        },
-        {
-          organizationId: ORG,
-          action: 'project.created',
-          targetType: 'project',
-        },
+        { organizationId: ORG, projectId: PROJECT, action: 'task.created', targetType: 'task', targetName: 'A' },
+        { organizationId: ORG, action: 'project.created', targetType: 'project' },
       ]);
 
       expect(prisma.activityLog.createMany).toHaveBeenCalledTimes(1);
@@ -68,12 +54,7 @@ describe('ActivityService', () => {
         action: 'task.created',
         targetName: 'A',
       });
-      expect(data[1]).toMatchObject({
-        projectId: null,
-        taskId: null,
-        targetId: null,
-        targetName: null,
-      });
+      expect(data[1]).toMatchObject({ projectId: null, taskId: null, targetId: null, targetName: null });
     });
 
     it('stamps entries from one request 1 ms apart, in order, so the feed keeps their sequence', async () => {
@@ -90,18 +71,8 @@ describe('ActivityService', () => {
 
     it('drops undefined metadata values and stores nothing for empty metadata', async () => {
       await service.record(ACTOR, [
-        {
-          organizationId: ORG,
-          action: 'task.created',
-          targetType: 'task',
-          metadata: { priority: 'HIGH', assigneeName: undefined },
-        },
-        {
-          organizationId: ORG,
-          action: 'task.deleted',
-          targetType: 'task',
-          metadata: { only: undefined },
-        },
+        { organizationId: ORG, action: 'task.created', targetType: 'task', metadata: { priority: 'HIGH', assigneeName: undefined } },
+        { organizationId: ORG, action: 'task.deleted', targetType: 'task', metadata: { only: undefined } },
       ]);
       const { data } = prisma.activityLog.createMany.mock.calls[0][0];
       expect(data[0].metadata).toEqual({ priority: 'HIGH' });
@@ -110,12 +81,7 @@ describe('ActivityService', () => {
 
     it('truncates an over-long target name to fit the column', async () => {
       await service.record(ACTOR, [
-        {
-          organizationId: ORG,
-          action: 'task.created',
-          targetType: 'task',
-          targetName: 'x'.repeat(400),
-        },
+        { organizationId: ORG, action: 'task.created', targetType: 'task', targetName: 'x'.repeat(400) },
       ]);
       const { data } = prisma.activityLog.createMany.mock.calls[0][0];
       expect(data[0].targetName).toHaveLength(255);
@@ -123,12 +89,8 @@ describe('ActivityService', () => {
 
     it('still records (with no actor name) if the actor row cannot be found', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
-      await service.record(ACTOR, [
-        { organizationId: ORG, action: 'task.created', targetType: 'task' },
-      ]);
-      expect(
-        prisma.activityLog.createMany.mock.calls[0][0].data[0].actorName,
-      ).toBeNull();
+      await service.record(ACTOR, [{ organizationId: ORG, action: 'task.created', targetType: 'task' }]);
+      expect(prisma.activityLog.createMany.mock.calls[0][0].data[0].actorName).toBeNull();
     });
   });
 
@@ -164,9 +126,7 @@ describe('ActivityService', () => {
 
     it('the audit trail is scoped to the organization and may filter by project', async () => {
       await service.listForOrganization(ORG, query());
-      expect(prisma.activityLog.count.mock.calls[0][0].where).toEqual({
-        organizationId: ORG,
-      });
+      expect(prisma.activityLog.count.mock.calls[0][0].where).toEqual({ organizationId: ORG });
 
       await service.listForOrganization(ORG, query({ projectId: PROJECT }));
       expect(prisma.activityLog.count.mock.calls[1][0].where).toEqual({
@@ -176,14 +136,8 @@ describe('ActivityService', () => {
     });
 
     it('a project feed ignores a projectId filter from the query string', async () => {
-      await service.listForProject(
-        ORG,
-        PROJECT,
-        query({ projectId: 'other-project' }),
-      );
-      expect(prisma.activityLog.count.mock.calls[0][0].where.projectId).toBe(
-        PROJECT,
-      );
+      await service.listForProject(ORG, PROJECT, query({ projectId: 'other-project' }));
+      expect(prisma.activityLog.count.mock.calls[0][0].where.projectId).toBe(PROJECT);
     });
 
     it('applies action, actor, task and date-range filters', async () => {
@@ -235,12 +189,7 @@ describe('ActivityService', () => {
         actorName: 'Lena Lead',
         createdAt: new Date('2026-10-18T10:00:00Z'),
       });
-      expect(result).toMatchObject({
-        total: 1,
-        page: 1,
-        pageSize: 20,
-        totalPages: 1,
-      });
+      expect(result).toMatchObject({ total: 1, page: 1, pageSize: 20, totalPages: 1 });
     });
   });
 });

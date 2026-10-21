@@ -93,11 +93,7 @@ describe('Realtime (e2e)', () => {
   }
 
   /** Resolves with the next payload of `event`, or rejects after `ms`. */
-  function waitFor<T = any>(
-    socket: Socket,
-    event: string,
-    ms = 2000,
-  ): Promise<T> {
+  function waitFor<T = any>(socket: Socket, event: string, ms = 2000): Promise<T> {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         socket.off(event, handler);
@@ -464,7 +460,7 @@ describe('Realtime (e2e)', () => {
       await expectNoEvent(stranger, 'project:changed');
     });
 
-    it("closes all of a user's connections when they log out", async () => {
+    it('closes all of a user\'s connections when they log out', async () => {
       const w = await world();
       const tab1 = await connect(w.member.token);
       const tab2 = await connect(w.member.token);
@@ -539,9 +535,7 @@ describe('Realtime (e2e)', () => {
     it('works for an offline user too: it is waiting in the inbox', async () => {
       const w = await world(); // nobody is connected
 
-      await createTask(w, w.lead.token, { assigneeId: w.member.id }).expect(
-        201,
-      );
+      await createTask(w, w.lead.token, { assigneeId: w.member.id }).expect(201);
 
       expect(await unreadCount(w.member.token)).toBe(1);
     });
@@ -559,9 +553,7 @@ describe('Realtime (e2e)', () => {
     it('notifies only when the assignee actually CHANGES', async () => {
       const w = await world();
       const task = (
-        await createTask(w, w.lead.token, { assigneeId: w.member.id }).expect(
-          201,
-        )
+        await createTask(w, w.lead.token, { assigneeId: w.member.id }).expect(201)
       ).body;
       const url = `${w.projectUrl}/boards/${w.boardId}/tasks/${task.id}`;
 
@@ -585,9 +577,7 @@ describe('Realtime (e2e)', () => {
     it('notifies the assignee about comments (but not the commenter themself)', async () => {
       const w = await world();
       const task = (
-        await createTask(w, w.lead.token, { assigneeId: w.member.id }).expect(
-          201,
-        )
+        await createTask(w, w.lead.token, { assigneeId: w.member.id }).expect(201)
       ).body;
       const commentsUrl = `${w.projectUrl}/boards/${w.boardId}/tasks/${task.id}/comments`;
 
@@ -610,9 +600,10 @@ describe('Realtime (e2e)', () => {
         .get('/notifications')
         .set('Authorization', bearer(w.member.token))
         .expect(200);
-      expect(
-        inbox.body.items.map((n: { type: string }) => n.type).sort(),
-      ).toEqual(['COMMENT_ADDED', 'TASK_ASSIGNED']);
+      expect(inbox.body.items.map((n: { type: string }) => n.type).sort()).toEqual([
+        'COMMENT_ADDED',
+        'TASK_ASSIGNED',
+      ]);
     });
 
     it('tells someone when they are added to a project', async () => {
@@ -684,12 +675,7 @@ describe('Realtime (e2e)', () => {
           .set('Authorization', bearer(w.member.token));
 
       const page = (await list('pageSize=2&page=2').expect(200)).body;
-      expect(page).toMatchObject({
-        total: 3,
-        page: 2,
-        pageSize: 2,
-        totalPages: 2,
-      });
+      expect(page).toMatchObject({ total: 3, page: 2, pageSize: 2, totalPages: 2 });
       expect(page.items).toHaveLength(1);
 
       const first = (await list('pageSize=1').expect(200)).body.items[0];
@@ -704,11 +690,9 @@ describe('Realtime (e2e)', () => {
       await list('unread=maybe').expect(400);
     });
 
-    it("never shows you anyone else's notifications", async () => {
+    it('never shows you anyone else\'s notifications', async () => {
       const w = await world();
-      await createTask(w, w.lead.token, { assigneeId: w.member.id }).expect(
-        201,
-      );
+      await createTask(w, w.lead.token, { assigneeId: w.member.id }).expect(201);
 
       await settleNotifications(app);
       const theirs = await api()

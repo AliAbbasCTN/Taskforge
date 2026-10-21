@@ -41,11 +41,7 @@ describe('canActOnProject', () => {
 
   it('an org MEMBER who is not on the project can do nothing', () => {
     expect(
-      canActOnProject(
-        MembershipRole.MEMBER,
-        null,
-        Permission.ProjectTasksWrite,
-      ),
+      canActOnProject(MembershipRole.MEMBER, null, Permission.ProjectTasksWrite),
     ).toBe(false);
   });
 });

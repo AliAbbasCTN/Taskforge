@@ -107,10 +107,7 @@ export class NotificationsService {
       return;
     }
 
-    const data: NotificationJobData = {
-      ...input,
-      notificationId: randomUUID(),
-    };
+    const data: NotificationJobData = { ...input, notificationId: randomUUID() };
 
     try {
       await withTimeout(

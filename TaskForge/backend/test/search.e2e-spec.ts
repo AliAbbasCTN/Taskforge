@@ -63,11 +63,7 @@ describe('Search (e2e)', () => {
       .post('/auth/register')
       .send({ email, name, password: 'password1' })
       .expect(201);
-    return {
-      id: res.body.user.id as string,
-      email,
-      token: res.body.tokens.accessToken as string,
-    };
+    return { id: res.body.user.id as string, email, token: res.body.tokens.accessToken as string };
   }
 
   /** An organization with a lead, a plain member, an outsider, and one project + board. */
@@ -75,11 +71,7 @@ describe('Search (e2e)', () => {
     const lead = await register('lead@example.com', 'Lena Lead');
     const outsider = await register('outsider@example.com', 'Olga Outsider');
     const orgId = (
-      await api()
-        .post('/organizations')
-        .set('Authorization', bearer(lead.token))
-        .send({ name: 'Org' })
-        .expect(201)
+      await api().post('/organizations').set('Authorization', bearer(lead.token)).send({ name: 'Org' }).expect(201)
     ).body.id as string;
 
     const makeProject = async (name: string, description?: string) => {
@@ -100,27 +92,16 @@ describe('Search (e2e)', () => {
       const boardPath = `/organizations/${orgId}/projects/${projectId}/boards/${board.id}`;
       const createTask = async (
         title: string,
-        extra: {
-          description?: string;
-          priority?: string;
-          columnId?: string;
-        } = {},
+        extra: { description?: string; priority?: string; columnId?: string } = {},
       ) =>
         (
           await api()
             .post(`${boardPath}/tasks`)
             .set('Authorization', bearer(lead.token))
-            .send({
-              columnId: extra.columnId ?? board.columns[0].id,
-              title,
-              ...extra,
-            })
+            .send({ columnId: extra.columnId ?? board.columns[0].id, title, ...extra })
             .expect(201)
         ).body.id as string;
-      const search = (
-        params: Record<string, string | number>,
-        token = lead.token,
-      ) =>
+      const search = (params: Record<string, string | number>, token = lead.token) =>
         api()
           .get(`/organizations/${orgId}/projects/${projectId}/search/tasks`)
           .query(params)
@@ -139,18 +120,13 @@ describe('Search (e2e)', () => {
         description: 'The login flow is described here',
       });
       const inTitle = await p.createTask('Fix login redirect');
-      await p.createTask('Unrelated chore', {
-        description: 'Water the plants',
-      });
+      await p.createTask('Unrelated chore', { description: 'Water the plants' });
 
       const res = await p.search({ q: 'login' }).expect(200);
 
       expect(res.body.total).toBe(2);
       // Title (weight A) outranks description (weight B).
-      expect(res.body.items.map((i: { id: string }) => i.id)).toEqual([
-        inTitle,
-        inDescription,
-      ]);
+      expect(res.body.items.map((i: { id: string }) => i.id)).toEqual([inTitle, inDescription]);
       expect(res.body.items[0].score).toBeGreaterThan(res.body.items[1].score);
       // Highlight markers wrap the matched word; they are plain characters, not HTML.
       expect(res.body.items[0].titleHighlight).toBe('Fix ⟦login⟧ redirect');
@@ -161,11 +137,7 @@ describe('Search (e2e)', () => {
         id: inTitle,
         labels: [],
         assignee: null,
-        column: {
-          id: p.board.columns[0].id,
-          name: expect.any(String),
-          boardId: p.board.id,
-        },
+        column: { id: p.board.columns[0].id, name: expect.any(String), boardId: p.board.id },
       });
     });
 
@@ -189,24 +161,17 @@ describe('Search (e2e)', () => {
       await p.createTask('Password reset page');
 
       const phrase = await p.search({ q: '"password reset"' }).expect(200);
-      expect(phrase.body.items.map((i: { title: string }) => i.title)).toEqual([
-        'Password reset page',
-      ]);
+      expect(phrase.body.items.map((i: { title: string }) => i.title)).toEqual(['Password reset page']);
 
       const excluded = await p.search({ q: 'password -email' }).expect(200);
-      expect(
-        excluded.body.items.map((i: { title: string }) => i.title),
-      ).toEqual(['Password reset page']);
+      expect(excluded.body.items.map((i: { title: string }) => i.title)).toEqual(['Password reset page']);
     });
 
     it('keeps working when the title or description is edited (the trigger re-indexes)', async () => {
       const w = await world();
       const p = await w.makeProject('Apollo');
       const taskId = await p.createTask('Old wording');
-      await p
-        .search({ q: 'refactor' })
-        .expect(200)
-        .expect((r) => expect(r.body.total).toBe(0));
+      await p.search({ q: 'refactor' }).expect(200).expect((r) => expect(r.body.total).toBe(0));
 
       await api()
         .patch(`${p.boardPath}/tasks/${taskId}`)
@@ -214,14 +179,8 @@ describe('Search (e2e)', () => {
         .send({ title: 'Refactor the billing module' })
         .expect(200);
 
-      await p
-        .search({ q: 'refactor' })
-        .expect(200)
-        .expect((r) => expect(r.body.total).toBe(1));
-      await p
-        .search({ q: 'wording' })
-        .expect(200)
-        .expect((r) => expect(r.body.total).toBe(0));
+      await p.search({ q: 'refactor' }).expect(200).expect((r) => expect(r.body.total).toBe(1));
+      await p.search({ q: 'wording' }).expect(200).expect((r) => expect(r.body.total).toBe(0));
     });
 
     it('is safe against hostile search text: no error, no matches, tables intact', async () => {
@@ -229,19 +188,11 @@ describe('Search (e2e)', () => {
       const p = await w.makeProject('Apollo');
       await p.createTask('Normal task');
 
-      for (const q of [
-        "'; DROP TABLE tasks; --",
-        '"unterminated',
-        '((( & | !',
-        "login') OR 1=1 --",
-      ]) {
+      for (const q of ["'; DROP TABLE tasks; --", '"unterminated', '((( & | !', "login') OR 1=1 --"]) {
         const res = await p.search({ q }).expect(200);
         expect(res.body.items).toEqual([]);
       }
-      await p
-        .search({ q: 'normal' })
-        .expect(200)
-        .expect((r) => expect(r.body.total).toBe(1));
+      await p.search({ q: 'normal' }).expect(200).expect((r) => expect(r.body.total).toBe(1));
     });
   });
 
@@ -256,27 +207,16 @@ describe('Search (e2e)', () => {
         columnId: p.board.columns[1].id,
       });
 
-      const urgent = await p
-        .search({ q: 'deploy', priority: 'URGENT' })
-        .expect(200);
+      const urgent = await p.search({ q: 'deploy', priority: 'URGENT' }).expect(200);
       expect(urgent.body.total).toBe(2);
 
       const urgentInFirstColumn = await p
-        .search({
-          q: 'deploy',
-          priority: 'URGENT',
-          columnId: p.board.columns[0].id,
-        })
+        .search({ q: 'deploy', priority: 'URGENT', columnId: p.board.columns[0].id })
         .expect(200);
-      expect(
-        urgentInFirstColumn.body.items.map((i: { title: string }) => i.title),
-      ).toEqual(['Deploy hotfix']);
+      expect(urgentInFirstColumn.body.items.map((i: { title: string }) => i.title)).toEqual(['Deploy hotfix']);
 
       const wrongBoard = await p
-        .search({
-          q: 'deploy',
-          boardId: '00000000-0000-4000-8000-000000000000',
-        })
+        .search({ q: 'deploy', boardId: '00000000-0000-4000-8000-000000000000' })
         .expect(200);
       expect(wrongBoard.body.total).toBe(0);
     });
@@ -288,9 +228,7 @@ describe('Search (e2e)', () => {
       await p.createTask('Report alpha');
       await p.createTask('Report bravo');
 
-      const asc = await p
-        .search({ q: 'report', sortBy: 'title', sortOrder: 'asc' })
-        .expect(200);
+      const asc = await p.search({ q: 'report', sortBy: 'title', sortOrder: 'asc' }).expect(200);
       expect(asc.body.items.map((i: { title: string }) => i.title)).toEqual([
         'Report alpha',
         'Report bravo',
@@ -307,23 +245,14 @@ describe('Search (e2e)', () => {
 
       const seen: string[] = [];
       for (const page of [1, 2, 3]) {
-        const res = await p
-          .search({ q: 'report', pageSize: 2, page })
-          .expect(200);
-        expect(res.body).toMatchObject({
-          total: 5,
-          page,
-          pageSize: 2,
-          totalPages: 3,
-        });
+        const res = await p.search({ q: 'report', pageSize: 2, page }).expect(200);
+        expect(res.body).toMatchObject({ total: 5, page, pageSize: 2, totalPages: 3 });
         seen.push(...res.body.items.map((i: { id: string }) => i.id));
       }
       expect(seen).toHaveLength(5);
       expect(new Set(seen).size).toBe(5);
 
-      const beyond = await p
-        .search({ q: 'report', pageSize: 2, page: 9 })
-        .expect(200);
+      const beyond = await p.search({ q: 'report', pageSize: 2, page: 9 }).expect(200);
       expect(beyond.body).toMatchObject({ items: [], total: 5 });
     });
   });
@@ -338,9 +267,7 @@ describe('Search (e2e)', () => {
 
       const res = await a.search({ q: 'keyword' }).expect(200);
 
-      expect(res.body.items.map((i: { title: string }) => i.title)).toEqual([
-        'Shared keyword in A',
-      ]);
+      expect(res.body.items.map((i: { title: string }) => i.title)).toEqual(['Shared keyword in A']);
     });
 
     it('401 without a token; 404 for someone outside the organization', async () => {
@@ -374,12 +301,7 @@ describe('Search (e2e)', () => {
   });
 
   describe('project search (GET /organizations/:id/projects?search=)', () => {
-    const list = (
-      app_: INestApplication,
-      orgId: string,
-      token: string,
-      search: string,
-    ) =>
+    const list = (app_: INestApplication, orgId: string, token: string, search: string) =>
       request(app_.getHttpServer())
         .get(`/organizations/${orgId}/projects`)
         .query({ search })
@@ -393,10 +315,7 @@ describe('Search (e2e)', () => {
 
       const res = await list(app, w.orgId, w.lead.token, 'apollo').expect(200);
 
-      expect(res.body.map((p: { name: string }) => p.name).sort()).toEqual([
-        'Apollo Mission',
-        'Website',
-      ]);
+      expect(res.body.map((p: { name: string }) => p.name).sort()).toEqual(['Apollo Mission', 'Website']);
     });
 
     it('treats % and _ as ordinary characters, not wildcards', async () => {
@@ -406,9 +325,7 @@ describe('Search (e2e)', () => {
 
       const res = await list(app, w.orgId, w.lead.token, '100%').expect(200);
 
-      expect(res.body.map((p: { name: string }) => p.name)).toEqual([
-        'Q4 100% done',
-      ]);
+      expect(res.body.map((p: { name: string }) => p.name)).toEqual(['Q4 100% done']);
     });
 
     it('never reveals a project the requester could not already list', async () => {

@@ -17,10 +17,7 @@ describe('projectRoleHasPermission', () => {
 
   it('LEAD can also restructure boards and write tasks', () => {
     expect(
-      projectRoleHasPermission(
-        ProjectRole.LEAD,
-        Permission.ProjectBoardsManage,
-      ),
+      projectRoleHasPermission(ProjectRole.LEAD, Permission.ProjectBoardsManage),
     ).toBe(true);
     expect(
       projectRoleHasPermission(ProjectRole.LEAD, Permission.ProjectTasksWrite),
@@ -29,10 +26,7 @@ describe('projectRoleHasPermission', () => {
 
   it('MEMBER can write tasks but not restructure boards', () => {
     expect(
-      projectRoleHasPermission(
-        ProjectRole.MEMBER,
-        Permission.ProjectTasksWrite,
-      ),
+      projectRoleHasPermission(ProjectRole.MEMBER, Permission.ProjectTasksWrite),
     ).toBe(true);
     expect(
       projectRoleHasPermission(

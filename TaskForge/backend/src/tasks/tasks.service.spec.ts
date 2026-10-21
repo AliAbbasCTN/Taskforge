@@ -259,7 +259,13 @@ describe('TasksService', () => {
       prisma.task.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.update(projectId, boardId, 'task', { title: 'New' }, actorId),
+        service.update(
+          projectId,
+          boardId,
+          'task',
+          { title: 'New' },
+          actorId,
+        ),
       ).rejects.toThrow(NotFoundException);
     });
   });
@@ -365,9 +371,7 @@ describe('TasksService', () => {
       prisma.task.findMany.mockResolvedValue([
         {
           id: 't1',
-          labels: [
-            { taskId: 't1', labelId: 'l1', label: { id: 'l1', name: 'Bug' } },
-          ],
+          labels: [{ taskId: 't1', labelId: 'l1', label: { id: 'l1', name: 'Bug' } }],
         },
       ]);
     });

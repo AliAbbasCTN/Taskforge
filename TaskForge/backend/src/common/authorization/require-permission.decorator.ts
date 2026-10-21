@@ -1,4 +1,6 @@
-import { SetMetadata } from '@nestjs/common';
+import { applyDecorators, SetMetadata } from '@nestjs/common';
+import { ApiExtension, ApiForbiddenResponse } from '@nestjs/swagger';
+import { ErrorResponseDto } from '../swagger/error-response.dto';
 import { Permission } from './permission.enum';
 
 export const PERMISSION_METADATA_KEY = 'requiredPermission';
@@ -24,6 +26,18 @@ export const PERMISSION_METADATA_KEY = 'requiredPermission';
  *
  * The corresponding guard reads this metadata off the route handler at
  * request time via `Reflector.get(PERMISSION_METADATA_KEY, handler)`.
+ *
+ * PHASE 16: the same declaration now also DOCUMENTS the route. It adds a 403
+ * response and an `x-required-permission` extension to the OpenAPI document,
+ * so the permission shown in Swagger is the one the guard enforces - there is
+ * no second place to keep up to date, and so nothing that can drift.
  */
 export const RequirePermission = (permission: Permission) =>
-  SetMetadata(PERMISSION_METADATA_KEY, permission);
+  applyDecorators(
+    SetMetadata(PERMISSION_METADATA_KEY, permission),
+    ApiExtension('x-required-permission', permission),
+    ApiForbiddenResponse({
+      description: `Forbidden - requires the \`${permission}\` permission.`,
+      type: ErrorResponseDto,
+    }),
+  );

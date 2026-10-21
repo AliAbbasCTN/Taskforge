@@ -1,3 +1,4 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEmail, IsEnum, IsOptional } from 'class-validator';
 import { MembershipRole } from '@prisma/client';
 
@@ -19,9 +20,18 @@ import { MembershipRole } from '@prisma/client';
  */
 export class AddMemberDto {
   @IsEmail()
+  @ApiProperty({
+    example: 'grace@example.com',
+    description: 'Must already have a TaskForge account.',
+  })
   email!: string;
 
   @IsOptional()
   @IsEnum(MembershipRole)
+  @ApiPropertyOptional({
+    enum: MembershipRole,
+    enumName: 'MembershipRole',
+    default: MembershipRole.MEMBER,
+  })
   role?: MembershipRole;
 }

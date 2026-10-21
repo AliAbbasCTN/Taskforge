@@ -4,25 +4,13 @@ import { buildNotificationMessage, truncate } from './notification-message';
 describe('buildNotificationMessage', () => {
   it('words each notification type', () => {
     expect(
-      buildNotificationMessage(
-        NotificationType.TASK_ASSIGNED,
-        'Ada',
-        'Fix login',
-      ),
+      buildNotificationMessage(NotificationType.TASK_ASSIGNED, 'Ada', 'Fix login'),
     ).toBe('Ada assigned you "Fix login"');
     expect(
-      buildNotificationMessage(
-        NotificationType.COMMENT_ADDED,
-        'Ada',
-        'Fix login',
-      ),
+      buildNotificationMessage(NotificationType.COMMENT_ADDED, 'Ada', 'Fix login'),
     ).toBe('Ada commented on "Fix login"');
     expect(
-      buildNotificationMessage(
-        NotificationType.ADDED_TO_PROJECT,
-        'Ada',
-        'Apollo',
-      ),
+      buildNotificationMessage(NotificationType.ADDED_TO_PROJECT, 'Ada', 'Apollo'),
     ).toBe('Ada added you to the project "Apollo"');
   });
 

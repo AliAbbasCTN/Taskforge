@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { IsJWT } from 'class-validator';
 
 /**
@@ -11,5 +12,9 @@ import { IsJWT } from 'class-validator';
  */
 export class RefreshTokenDto {
   @IsJWT({ message: 'refreshToken must be a valid JWT' })
+  @ApiProperty({
+    example: 'eyJhbGciOiJIUzI1NiIs...',
+    description: 'The refresh token returned by the last login or refresh.',
+  })
   refreshToken!: string;
 }

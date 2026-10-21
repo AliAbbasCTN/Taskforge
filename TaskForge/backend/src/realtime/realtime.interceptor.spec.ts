@@ -157,16 +157,13 @@ describe('RealtimeInterceptor', () => {
       });
 
       await expect(
-        run(
-          contextFor(SampleController, 'write', writeRequest()),
-          handlerReturning('ok'),
-        ),
+        run(contextFor(SampleController, 'write', writeRequest()), handlerReturning('ok')),
       ).resolves.toBe('ok');
     });
   });
 
   describe('revoking access', () => {
-    it("re-checks the TARGET user's sockets, and finishes BEFORE the response is delivered", async () => {
+    it('re-checks the TARGET user\'s sockets, and finishes BEFORE the response is delivered', async () => {
       let finished = false;
       realtime.revalidateUser.mockImplementation(async () => {
         await Promise.resolve();
@@ -177,10 +174,7 @@ describe('RealtimeInterceptor', () => {
         contextFor(
           SampleController,
           'removeMember',
-          writeRequest({
-            method: 'DELETE',
-            params: { projectId: 'p1', userId: 'target-9' },
-          }),
+          writeRequest({ method: 'DELETE', params: { projectId: 'p1', userId: 'target-9' } }),
         ),
         handlerReturning('done'),
       );
@@ -228,7 +222,7 @@ describe('RealtimeInterceptor', () => {
       ).resolves.toBe('done');
     });
 
-    it("closes the CALLER's sockets on logout", async () => {
+    it('closes the CALLER\'s sockets on logout', async () => {
       await run(
         contextFor(SampleController, 'logout', writeRequest({ params: {} })),
         handlerReturning(undefined),

@@ -1,3 +1,4 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
   IsNotEmpty,
@@ -24,11 +25,17 @@ export class UpdateProjectDto {
   @IsNotEmpty()
   @MinLength(2)
   @MaxLength(150)
+  @ApiPropertyOptional({ example: 'Website relaunch v2', minLength: 2, maxLength: 150 })
   name?: string;
 
   @IsOptional()
   @Transform(trimString)
   @IsString()
   @MaxLength(2000)
+  @ApiPropertyOptional({
+    example: 'Rebuild the marketing site.',
+    maxLength: 2000,
+    description: 'Send an empty string to clear the description.',
+  })
   description?: string;
 }

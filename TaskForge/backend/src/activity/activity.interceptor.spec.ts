@@ -9,9 +9,7 @@ const ORG = '11111111-1111-4111-8111-111111111111';
 const PROJECT = '22222222-2222-4222-8222-222222222222';
 const TASK = '44444444-4444-4444-8444-444444444444';
 
-function build(
-  options: { action?: string; user?: unknown; type?: string } = {},
-) {
+function build(options: { action?: string; user?: unknown; type?: string } = {}) {
   const calls: string[] = [];
   const activity = {
     record: jest.fn().mockImplementation(async () => {
@@ -55,9 +53,7 @@ describe('ActivityInterceptor', () => {
       action: 'task.deleted',
     });
 
-    const result = await lastValueFrom(
-      interceptor.intercept(context, handle(undefined)),
-    );
+    const result = await lastValueFrom(interceptor.intercept(context, handle(undefined)));
 
     expect(result).toBeUndefined();
     expect(calls).toEqual(['snapshot', 'handler', 'record']);
@@ -76,25 +72,19 @@ describe('ActivityInterceptor', () => {
     });
   });
 
-  it("passes the handler's response through unchanged", async () => {
+  it('passes the handler\'s response through unchanged', async () => {
     const { interceptor, context, handle } = build({ action: 'task.created' });
     const response = { id: TASK, title: 'New' };
 
-    expect(
-      await lastValueFrom(interceptor.intercept(context, handle(response))),
-    ).toBe(response);
+    expect(await lastValueFrom(interceptor.intercept(context, handle(response)))).toBe(response);
   });
 
   it('records NOTHING when the handler fails', async () => {
-    const { interceptor, context, activity } = build({
-      action: 'task.deleted',
-    });
+    const { interceptor, context, activity } = build({ action: 'task.deleted' });
 
     await expect(
       lastValueFrom(
-        interceptor.intercept(context, {
-          handle: () => throwError(() => new Error('404')),
-        }),
+        interceptor.intercept(context, { handle: () => throwError(() => new Error('404')) }),
       ),
     ).rejects.toThrow('404');
 
@@ -102,21 +92,15 @@ describe('ActivityInterceptor', () => {
   });
 
   it('a failure while recording never fails the request', async () => {
-    const { interceptor, context, activity, handle } = build({
-      action: 'task.created',
-    });
+    const { interceptor, context, activity, handle } = build({ action: 'task.created' });
     activity.record.mockRejectedValue(new Error('db down'));
 
     const response = { id: TASK, title: 'New' };
-    expect(
-      await lastValueFrom(interceptor.intercept(context, handle(response))),
-    ).toBe(response);
+    expect(await lastValueFrom(interceptor.intercept(context, handle(response)))).toBe(response);
   });
 
   it('a failing snapshot still lets the request through and the entry be recorded', async () => {
-    const { interceptor, context, activity, snapshots, handle } = build({
-      action: 'task.deleted',
-    });
+    const { interceptor, context, activity, snapshots, handle } = build({ action: 'task.deleted' });
     snapshots.load.mockRejectedValue(new Error('db down'));
 
     await lastValueFrom(interceptor.intercept(context, handle(undefined)));
@@ -126,9 +110,7 @@ describe('ActivityInterceptor', () => {
   });
 
   it('does not touch routes without @LogsActivity', async () => {
-    const { interceptor, context, activity, snapshots, calls, handle } = build({
-      action: undefined,
-    });
+    const { interceptor, context, activity, snapshots, calls, handle } = build({ action: undefined });
 
     await lastValueFrom(interceptor.intercept(context, handle('x')));
 
@@ -143,9 +125,7 @@ describe('ActivityInterceptor', () => {
     expect(ws.activity.record).not.toHaveBeenCalled();
 
     const anonymous = build({ action: 'task.created', user: undefined });
-    await lastValueFrom(
-      anonymous.interceptor.intercept(anonymous.context, anonymous.handle('x')),
-    );
+    await lastValueFrom(anonymous.interceptor.intercept(anonymous.context, anonymous.handle('x')));
     expect(anonymous.activity.record).not.toHaveBeenCalled();
   });
 });

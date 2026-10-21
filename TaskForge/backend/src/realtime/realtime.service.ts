@@ -62,10 +62,7 @@ export class RealtimeService {
     for (const socket of sockets) {
       for (const room of socket.rooms) {
         const projectId = projectIdFromRoom(room);
-        if (
-          projectId &&
-          !(await this.access.canAccessProject(userId, projectId))
-        ) {
+        if (projectId && !(await this.access.canAccessProject(userId, projectId))) {
           socket.leave(room);
           this.logger.debug(`Removed ${userId} from ${room}: access lost`);
         }

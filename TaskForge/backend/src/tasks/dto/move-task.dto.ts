@@ -1,3 +1,4 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsInt, IsOptional, IsUUID, Min } from 'class-validator';
 
 /**
@@ -14,10 +15,18 @@ import { IsInt, IsOptional, IsUUID, Min } from 'class-validator';
  */
 export class MoveTaskDto {
   @IsUUID()
+  @ApiProperty({
+    format: 'uuid',
+    description: 'The target column (may be the current one). Moving to another column changes the task status.',
+  })
   columnId!: string;
 
   @IsOptional()
   @IsInt()
   @Min(0)
+  @ApiPropertyOptional({
+    minimum: 0,
+    description: 'Zero-based index in the target column. Omit to place at the bottom.',
+  })
   position?: number;
 }

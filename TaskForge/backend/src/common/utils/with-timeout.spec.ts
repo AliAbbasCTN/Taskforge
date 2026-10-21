@@ -17,9 +17,7 @@ describe('withTimeout', () => {
   it('rejects with a clear message when the promise takes too long', async () => {
     const never = new Promise<string>(() => undefined);
     const result = withTimeout(never, 500, 'Enqueue');
-    const assertion = expect(result).rejects.toThrow(
-      'Enqueue timed out after 500ms',
-    );
+    const assertion = expect(result).rejects.toThrow('Enqueue timed out after 500ms');
 
     jest.advanceTimersByTime(500);
 

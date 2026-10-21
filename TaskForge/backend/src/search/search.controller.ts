@@ -1,11 +1,9 @@
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiEndpoint, BEARER_AUTH_NAME } from '../common/swagger';
 import {
-  Controller,
-  Get,
-  ParseUUIDPipe,
-  Param,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
+  PaginatedSearchResponse,
+} from '../docs/models';
+import { Controller, Get, ParseUUIDPipe, Param, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OrganizationMembershipGuard } from '../organizations/guards/organization-membership.guard';
 import { ProjectGuard } from '../projects/guards/project.guard';
@@ -22,12 +20,19 @@ import { SearchService } from './search.service';
  * org admins/managers). A project you cannot see is a 404, exactly as
  * everywhere else.
  */
+@ApiTags('Search')
+@ApiBearerAuth(BEARER_AUTH_NAME)
 @Controller('organizations/:id/projects/:projectId/search')
 @UseGuards(JwtAuthGuard, OrganizationMembershipGuard, ProjectGuard)
 export class SearchController {
   constructor(private readonly searchService: SearchService) {}
 
   @Get('tasks')
+  @ApiEndpoint({
+    summary: 'Search tasks',
+    description: 'PostgreSQL full-text search over task titles and descriptions, scoped to ONE project. Words are stemmed ("logging" matches "login"). Combine with the usual task filters; results default to best match first. Each result carries a relevance `score`, a highlighted title and a highlighted `snippet`.',
+    ok: PaginatedSearchResponse,
+  })
   searchTasks(
     @Param('projectId', ParseUUIDPipe) projectId: string,
     @Query() query: SearchTasksQueryDto,

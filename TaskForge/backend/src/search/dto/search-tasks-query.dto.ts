@@ -1,3 +1,4 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
   IsIn,
@@ -47,22 +48,31 @@ export class SearchTasksQueryDto extends TaskFilterDto {
   @IsString()
   @MinLength(1)
   @MaxLength(MAX_SEARCH_TERM_LENGTH)
+  @ApiProperty({
+    example: 'login',
+    minLength: 1,
+    maxLength: MAX_SEARCH_TERM_LENGTH,
+    description: 'What to search for. Matches title and description, with stemming ("logging" finds "login").',
+  })
   q!: string;
 
   /** Restrict to one board of the project. */
   @IsOptional()
   @IsUUID()
+  @ApiPropertyOptional({ format: 'uuid', description: 'Only tasks on this board.' })
   boardId?: string;
 
   /** Restrict to one column. */
   @IsOptional()
   @IsUUID()
+  @ApiPropertyOptional({ format: 'uuid', description: 'Only tasks in this column.' })
   columnId?: string;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @ApiPropertyOptional({ minimum: 1, default: 1, description: 'Page number, starting at 1.' })
   page: number = 1;
 
   @IsOptional()
@@ -70,13 +80,25 @@ export class SearchTasksQueryDto extends TaskFilterDto {
   @IsInt()
   @Min(1)
   @Max(MAX_PAGE_SIZE)
+  @ApiPropertyOptional({
+    minimum: 1,
+    maximum: MAX_PAGE_SIZE,
+    default: DEFAULT_PAGE_SIZE,
+    description: 'Items per page.',
+  })
   pageSize: number = DEFAULT_PAGE_SIZE;
 
   @IsOptional()
   @IsIn(TASK_SEARCH_SORT_FIELDS)
+  @ApiPropertyOptional({ enum: [...TASK_SEARCH_SORT_FIELDS], default: 'relevance' })
   sortBy: TaskSearchSortField = 'relevance';
 
   @IsOptional()
   @IsIn(['asc', 'desc'])
+  @ApiPropertyOptional({
+    enum: ['asc', 'desc'],
+    default: 'desc',
+    description: 'Ignored when sortBy is relevance.',
+  })
   sortOrder: 'asc' | 'desc' = 'desc';
 }

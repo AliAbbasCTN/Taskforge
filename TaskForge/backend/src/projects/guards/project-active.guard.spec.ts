@@ -15,9 +15,9 @@ describe('ProjectActiveGuard', () => {
     }) as unknown as ExecutionContext;
 
   it('allows writes to an ACTIVE project', () => {
-    expect(
-      guard.canActivate(contextWith({ status: ProjectStatus.ACTIVE })),
-    ).toBe(true);
+    expect(guard.canActivate(contextWith({ status: ProjectStatus.ACTIVE }))).toBe(
+      true,
+    );
   });
 
   it('rejects writes to an ARCHIVED project with 409', () => {

@@ -5,7 +5,7 @@ describe('QueueMonitorService', () => {
   const queueReturning = (counts: Record<string, number>) =>
     ({ getJobCounts: jest.fn().mockResolvedValue(counts) }) as unknown as Queue;
 
-  it("reports Redis up with each queue's counts", async () => {
+  it('reports Redis up with each queue\'s counts', async () => {
     const service = new QueueMonitorService(
       queueReturning({ waiting: 2, active: 1, delayed: 3, failed: 4 }),
       queueReturning({ delayed: 1 }),

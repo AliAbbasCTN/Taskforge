@@ -1,9 +1,6 @@
 /** The two events of an ioredis client this helper cares about. */
 export interface RedisEventSource {
-  on(
-    event: 'error',
-    listener: (error: Error & { code?: string }) => void,
-  ): unknown;
+  on(event: 'error', listener: (error: Error & { code?: string }) => void): unknown;
   on(event: 'ready', listener: () => void): unknown;
 }
 
@@ -51,11 +48,8 @@ export function watchRedisClient(
       return;
     }
     const reason = error.message || error.code || error.name || 'unknown error';
-    const extra =
-      suppressed > 0 ? ` (${suppressed} similar errors not shown)` : '';
-    logger.warn(
-      `${label}: cannot reach Redis - ${reason}${extra}. Retrying in the background.`,
-    );
+    const extra = suppressed > 0 ? ` (${suppressed} similar errors not shown)` : '';
+    logger.warn(`${label}: cannot reach Redis - ${reason}${extra}. Retrying in the background.`);
     lastLoggedAt = current;
     suppressed = 0;
   });

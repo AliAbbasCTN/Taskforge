@@ -46,11 +46,7 @@ describe('AttachmentsService', () => {
         findMany: jest.fn().mockResolvedValue([]),
         findFirst: jest.fn(),
         count: jest.fn().mockResolvedValue(0),
-        create: jest
-          .fn()
-          .mockImplementation(({ data }) =>
-            Promise.resolve({ id: 'a1', ...data }),
-          ),
+        create: jest.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'a1', ...data })),
         delete: jest.fn().mockResolvedValue({}),
       },
     };
@@ -75,9 +71,7 @@ describe('AttachmentsService', () => {
       expect(storage.put).toHaveBeenCalledTimes(1);
       const [key, data, contentType] = storage.put.mock.calls[0];
       expect(key).toMatch(
-        new RegExp(
-          `^attachments/${scope.organizationId}/${scope.projectId}/${scope.taskId}/[0-9a-f-]{36}\\.png$`,
-        ),
+        new RegExp(`^attachments/${scope.organizationId}/${scope.projectId}/${scope.taskId}/[0-9a-f-]{36}\\.png$`),
       );
       expect(data).toBe(PNG);
       expect(contentType).toBe('image/png');
@@ -94,18 +88,15 @@ describe('AttachmentsService', () => {
     });
 
     it('rejects a missing file with 400 and stores nothing', async () => {
-      await expect(
-        service.upload(scope, 'u', undefined),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.upload(scope, 'u', undefined)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
       expect(storage.put).not.toHaveBeenCalled();
     });
 
     it('rejects a file whose contents do not match its extension with 415', async () => {
       await expect(
-        service.upload(scope, 'u', {
-          originalname: 'a.png',
-          buffer: Buffer.from('<html>'),
-        }),
+        service.upload(scope, 'u', { originalname: 'a.png', buffer: Buffer.from('<html>') }),
       ).rejects.toBeInstanceOf(UnsupportedMediaTypeException);
       expect(storage.put).not.toHaveBeenCalled();
     });
@@ -158,11 +149,7 @@ describe('AttachmentsService', () => {
       prisma.attachment.findFirst.mockResolvedValue(row);
       storage.get.mockResolvedValue(Readable.from(['x']));
 
-      const result = await service.openForDownload(
-        scope.boardId,
-        scope.taskId,
-        'a1',
-      );
+      const result = await service.openForDownload(scope.boardId, scope.taskId, 'a1');
 
       expect(prisma.attachment.findFirst).toHaveBeenCalledWith({
         where: {
@@ -185,9 +172,7 @@ describe('AttachmentsService', () => {
 
     it('404s (not 500) when the row exists but the stored file is gone', async () => {
       prisma.attachment.findFirst.mockResolvedValue(row);
-      storage.get.mockRejectedValue(
-        new StorageObjectNotFoundError(row.storageKey),
-      );
+      storage.get.mockRejectedValue(new StorageObjectNotFoundError(row.storageKey));
       await expect(
         service.openForDownload(scope.boardId, scope.taskId, 'a1'),
       ).rejects.toBeInstanceOf(NotFoundException);
@@ -195,55 +180,34 @@ describe('AttachmentsService', () => {
   });
 
   describe('remove', () => {
-    const row = {
-      id: 'a1',
-      uploaderId: 'user-1',
-      storageKey: 'attachments/x.pdf',
-    };
+    const row = { id: 'a1', uploaderId: 'user-1', storageKey: 'attachments/x.pdf' };
 
     it('lets the uploader delete: row first, then the bytes', async () => {
       prisma.attachment.findFirst.mockResolvedValue(row);
 
       await service.remove(scope.boardId, scope.taskId, 'a1', 'user-1', false);
 
-      expect(prisma.attachment.delete).toHaveBeenCalledWith({
-        where: { id: 'a1' },
-      });
+      expect(prisma.attachment.delete).toHaveBeenCalledWith({ where: { id: 'a1' } });
       expect(storage.delete).toHaveBeenCalledWith('attachments/x.pdf');
     });
 
-    it("lets a moderator delete someone else's upload", async () => {
+    it('lets a moderator delete someone else\'s upload', async () => {
       prisma.attachment.findFirst.mockResolvedValue(row);
-      await service.remove(
-        scope.boardId,
-        scope.taskId,
-        'a1',
-        'someone-else',
-        true,
-      );
+      await service.remove(scope.boardId, scope.taskId, 'a1', 'someone-else', true);
       expect(prisma.attachment.delete).toHaveBeenCalled();
     });
 
-    it("forbids a non-moderator deleting someone else's upload", async () => {
+    it('forbids a non-moderator deleting someone else\'s upload', async () => {
       prisma.attachment.findFirst.mockResolvedValue(row);
       await expect(
-        service.remove(
-          scope.boardId,
-          scope.taskId,
-          'a1',
-          'someone-else',
-          false,
-        ),
+        service.remove(scope.boardId, scope.taskId, 'a1', 'someone-else', false),
       ).rejects.toBeInstanceOf(ForbiddenException);
       expect(prisma.attachment.delete).not.toHaveBeenCalled();
       expect(storage.delete).not.toHaveBeenCalled();
     });
 
     it('forbids a non-moderator when the uploader account no longer exists', async () => {
-      prisma.attachment.findFirst.mockResolvedValue({
-        ...row,
-        uploaderId: null,
-      });
+      prisma.attachment.findFirst.mockResolvedValue({ ...row, uploaderId: null });
       await expect(
         service.remove(scope.boardId, scope.taskId, 'a1', 'user-1', false),
       ).rejects.toBeInstanceOf(ForbiddenException);

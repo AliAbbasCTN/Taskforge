@@ -53,22 +53,13 @@ describe('organizationRoleHasPermission', () => {
 
   it('only ADMIN can read the audit trail', () => {
     expect(
-      organizationRoleHasPermission(
-        MembershipRole.ADMIN,
-        Permission.AuditLogRead,
-      ),
+      organizationRoleHasPermission(MembershipRole.ADMIN, Permission.AuditLogRead),
     ).toBe(true);
     expect(
-      organizationRoleHasPermission(
-        MembershipRole.MANAGER,
-        Permission.AuditLogRead,
-      ),
+      organizationRoleHasPermission(MembershipRole.MANAGER, Permission.AuditLogRead),
     ).toBe(false);
     expect(
-      organizationRoleHasPermission(
-        MembershipRole.MEMBER,
-        Permission.AuditLogRead,
-      ),
+      organizationRoleHasPermission(MembershipRole.MEMBER, Permission.AuditLogRead),
     ).toBe(false);
   });
 

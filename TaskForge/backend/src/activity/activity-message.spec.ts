@@ -9,60 +9,15 @@ describe('formatActivityMessage', () => {
     ['task.deleted', 'Fix login', undefined, 'deleted task “Fix login”'],
     ['project.deleted', 'Apollo', undefined, 'deleted project “Apollo”'],
     ['project.archived', 'Apollo', undefined, 'archived project “Apollo”'],
-    [
-      'comment.created',
-      'Fix login',
-      undefined,
-      'commented on task “Fix login”',
-    ],
-    [
-      'task.assigned',
-      'Fix login',
-      { assigneeName: 'Max' },
-      'assigned task “Fix login” to Max',
-    ],
-    [
-      'task.unassigned',
-      'Fix login',
-      { assigneeName: 'Max' },
-      'unassigned Max from task “Fix login”',
-    ],
-    [
-      'task.moved',
-      'Fix login',
-      { from: 'To Do', to: 'Done' },
-      'moved task “Fix login” from To Do to Done',
-    ],
-    [
-      'attachment.added',
-      'Fix login',
-      { fileName: 'a.png' },
-      'attached a.png to task “Fix login”',
-    ],
-    [
-      'attachment.removed',
-      'Fix login',
-      { fileName: 'a.png' },
-      'removed a.png from task “Fix login”',
-    ],
-    [
-      'organization.member_added',
-      'Max',
-      { role: 'MANAGER' },
-      'added Max to the organization as manager',
-    ],
-    [
-      'project.member_role_changed',
-      'Max',
-      { from: 'MEMBER', to: 'LEAD' },
-      'changed Max’s project role from member to lead',
-    ],
-    [
-      'project.member_removed',
-      'Max',
-      undefined,
-      'removed Max from the project',
-    ],
+    ['comment.created', 'Fix login', undefined, 'commented on task “Fix login”'],
+    ['task.assigned', 'Fix login', { assigneeName: 'Max' }, 'assigned task “Fix login” to Max'],
+    ['task.unassigned', 'Fix login', { assigneeName: 'Max' }, 'unassigned Max from task “Fix login”'],
+    ['task.moved', 'Fix login', { from: 'To Do', to: 'Done' }, 'moved task “Fix login” from To Do to Done'],
+    ['attachment.added', 'Fix login', { fileName: 'a.png' }, 'attached a.png to task “Fix login”'],
+    ['attachment.removed', 'Fix login', { fileName: 'a.png' }, 'removed a.png from task “Fix login”'],
+    ['organization.member_added', 'Max', { role: 'MANAGER' }, 'added Max to the organization as manager'],
+    ['project.member_role_changed', 'Max', { from: 'MEMBER', to: 'LEAD' }, 'changed Max’s project role from member to lead'],
+    ['project.member_removed', 'Max', undefined, 'removed Max from the project'],
   ])('%s', (action, name, metadata, expected) => {
     expect(msg(action, name, metadata)).toBe(expected);
   });
@@ -71,9 +26,9 @@ describe('formatActivityMessage', () => {
     expect(msg('task.updated', 'T', { fields: ['title', 'dueDate'] })).toBe(
       'updated task “T” (title, due date)',
     );
-    expect(
-      msg('task.updated', 'New', { fields: ['title'], previousTitle: 'Old' }),
-    ).toBe('updated task “New” (title), previously “Old”');
+    expect(msg('task.updated', 'New', { fields: ['title'], previousTitle: 'Old' })).toBe(
+      'updated task “New” (title), previously “Old”',
+    );
   });
 
   it('lists labels, or says there are none', () => {

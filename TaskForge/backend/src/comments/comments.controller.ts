@@ -1,3 +1,12 @@
+import { ApiBearerAuth, ApiForbiddenResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiEndpoint,
+  BEARER_AUTH_NAME,
+  ErrorResponseDto,
+} from '../common/swagger';
+import {
+  CommentResponse,
+} from '../docs/models';
 import {
   Body,
   Controller,
@@ -47,6 +56,8 @@ import { LogsActivity } from '../activity/activity.decorator';
  * The task itself is verified inside `CommentsService` (scoped to the board),
  * the same way columns and tasks are - see its class comment.
  */
+@ApiTags('Comments')
+@ApiBearerAuth(BEARER_AUTH_NAME)
 @PublishesChanges('comments')
 @Controller(
   'organizations/:id/projects/:projectId/boards/:boardId/tasks/:taskId/comments',
@@ -56,6 +67,12 @@ export class CommentsController {
   constructor(private readonly commentsService: CommentsService) {}
 
   @Get()
+  @ApiEndpoint({
+    summary: 'List a task\'s comments',
+    description: 'Oldest first.',
+    ok: [CommentResponse],
+    notFound: 'The task is not on this board.',
+  })
   list(
     @Param('boardId', ParseUUIDPipe) boardId: string,
     @Param('taskId', ParseUUIDPipe) taskId: string,
@@ -67,6 +84,13 @@ export class CommentsController {
   @LogsActivity('comment.created')
   @RequirePermission(Permission.ProjectTasksWrite)
   @UseGuards(ProjectPermissionGuard, ProjectActiveGuard)
+  @ApiEndpoint({
+    summary: 'Add a comment',
+    description: 'Comment text is plain text and never rendered as HTML.',
+    created: CommentResponse,
+    notFound: 'The task is not on this board.',
+    conflict: 'The project is archived (read-only).',
+  })
   create(
     @Param('boardId', ParseUUIDPipe) boardId: string,
     @Param('taskId', ParseUUIDPipe) taskId: string,
@@ -79,6 +103,13 @@ export class CommentsController {
   @Patch(':commentId')
   @RequirePermission(Permission.ProjectTasksWrite)
   @UseGuards(ProjectPermissionGuard, ProjectActiveGuard)
+  @ApiEndpoint({
+    summary: 'Edit your comment',
+    description: 'Only the author can edit a comment - not even a project lead can put words in someone else\'s mouth.',
+    ok: CommentResponse,
+    notFound: 'No such comment on this task.',
+    conflict: 'The project is archived (read-only).',
+  })
   update(
     @Param('boardId', ParseUUIDPipe) boardId: string,
     @Param('taskId', ParseUUIDPipe) taskId: string,
@@ -100,6 +131,17 @@ export class CommentsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermission(Permission.ProjectTasksWrite)
   @UseGuards(ProjectPermissionGuard, ProjectActiveGuard)
+  @ApiEndpoint({
+    summary: 'Delete a comment',
+    description: 'The author can delete their own comment; project leads and organization ADMIN/MANAGERs can delete any (moderation).',
+    noContent: 'Comment deleted.',
+    notFound: 'No such comment on this task.',
+    conflict: 'The project is archived (read-only).',
+  })
+  @ApiForbiddenResponse({
+    description: 'It is not your comment and you do not manage the project.',
+    type: ErrorResponseDto,
+  })
   remove(
     @Param('boardId', ParseUUIDPipe) boardId: string,
     @Param('taskId', ParseUUIDPipe) taskId: string,

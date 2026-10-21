@@ -5,12 +5,7 @@ const ID = '11111111-1111-4111-8111-111111111111';
 
 describe('buildStorageKey', () => {
   it('has the documented shape and is different every time', () => {
-    const parts = {
-      organizationId: ID,
-      projectId: ID,
-      taskId: ID,
-      extension: 'png',
-    };
+    const parts = { organizationId: ID, projectId: ID, taskId: ID, extension: 'png' };
     const a = buildStorageKey(parts);
     const b = buildStorageKey(parts);
     expect(a).toMatch(

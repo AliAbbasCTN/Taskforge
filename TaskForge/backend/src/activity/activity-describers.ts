@@ -78,10 +78,7 @@ export const ACTIVITY_SPECS: Record<LoggedActivityAction, ActivitySpec> = {
     'organization.member_role_changed',
     false,
   ),
-  'organization.member_removed': memberRemoved(
-    'organization.member_removed',
-    false,
-  ),
+  'organization.member_removed': memberRemoved('organization.member_removed', false),
 
   // --------------------------------------------------------------------- project
   'project.created': {
@@ -128,10 +125,7 @@ export const ACTIVITY_SPECS: Record<LoggedActivityAction, ActivitySpec> = {
     ],
   },
   'project.member_added': memberAdded('project.member_added', true),
-  'project.member_role_changed': memberRoleChanged(
-    'project.member_role_changed',
-    true,
-  ),
+  'project.member_role_changed': memberRoleChanged('project.member_role_changed', true),
   'project.member_removed': memberRemoved('project.member_removed', true),
 
   // ----------------------------------------------------------------------- board
@@ -338,9 +332,7 @@ export const ACTIVITY_SPECS: Record<LoggedActivityAction, ActivitySpec> = {
 
 // ------------------------------------------------------------------ shared builders
 
-function projectState(
-  action: 'project.archived' | 'project.unarchived',
-): ActivitySpec {
+function projectState(action: 'project.archived' | 'project.unarchived'): ActivitySpec {
   return {
     describe: (c) => [
       {

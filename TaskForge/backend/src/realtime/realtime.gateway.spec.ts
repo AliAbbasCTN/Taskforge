@@ -205,9 +205,7 @@ describe('RealtimeGateway', () => {
     );
 
     it('refuses a socket with no authenticated user', async () => {
-      const ack = await gateway.handleJoin(socketWith(), {
-        projectId: PROJECT,
-      });
+      const ack = await gateway.handleJoin(socketWith(), { projectId: PROJECT });
 
       expect(ack).toEqual({ ok: false, error: 'Not authenticated' });
     });
@@ -218,9 +216,7 @@ describe('RealtimeGateway', () => {
         socket.rooms.add(`project:room-${i}`);
       }
 
-      const ack = await gateway.handleJoin(socket, {
-        projectId: OTHER_PROJECT,
-      });
+      const ack = await gateway.handleJoin(socket, { projectId: OTHER_PROJECT });
 
       expect(ack.ok).toBe(false);
       expect(access.canAccessProject).not.toHaveBeenCalled();

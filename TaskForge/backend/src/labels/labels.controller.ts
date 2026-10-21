@@ -1,3 +1,8 @@
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiEndpoint, BEARER_AUTH_NAME } from '../common/swagger';
+import {
+  LabelResponse,
+} from '../docs/models';
 import {
   Body,
   Controller,
@@ -38,6 +43,8 @@ import { UpdateLabelDto } from './dto/update-label.dto';
  * Attaching labels to a TASK is a task edit (`PUT .../tasks/:taskId/labels`),
  * which any project member may do.
  */
+@ApiTags('Labels')
+@ApiBearerAuth(BEARER_AUTH_NAME)
 @PublishesChanges('labels')
 @Controller('organizations/:id/projects/:projectId/labels')
 @UseGuards(JwtAuthGuard, OrganizationMembershipGuard, ProjectGuard)
@@ -45,6 +52,10 @@ export class LabelsController {
   constructor(private readonly labelsService: LabelsService) {}
 
   @Get()
+  @ApiEndpoint({
+    summary: 'List a project\'s labels',
+    ok: [LabelResponse],
+  })
   list(@Param('projectId', ParseUUIDPipe) projectId: string) {
     return this.labelsService.list(projectId);
   }
@@ -52,6 +63,11 @@ export class LabelsController {
   @Post()
   @RequirePermission(Permission.ProjectBoardsManage)
   @UseGuards(ProjectPermissionGuard, ProjectActiveGuard)
+  @ApiEndpoint({
+    summary: 'Create a label',
+    created: LabelResponse,
+    conflict: 'A label with that name already exists in the project, or the project is archived.',
+  })
   create(
     @Param('projectId', ParseUUIDPipe) projectId: string,
     @Body() dto: CreateLabelDto,
@@ -62,6 +78,13 @@ export class LabelsController {
   @Patch(':labelId')
   @RequirePermission(Permission.ProjectBoardsManage)
   @UseGuards(ProjectPermissionGuard, ProjectActiveGuard)
+  @ApiEndpoint({
+    summary: 'Edit a label',
+    description: 'Send `name`, `color` or both.',
+    ok: LabelResponse,
+    notFound: 'No such label in this project.',
+    conflict: 'The new name is taken, or the project is archived.',
+  })
   update(
     @Param('projectId', ParseUUIDPipe) projectId: string,
     @Param('labelId', ParseUUIDPipe) labelId: string,
@@ -74,6 +97,13 @@ export class LabelsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermission(Permission.ProjectBoardsManage)
   @UseGuards(ProjectPermissionGuard, ProjectActiveGuard)
+  @ApiEndpoint({
+    summary: 'Delete a label',
+    description: 'Also removes it from every task that has it.',
+    noContent: 'Label deleted.',
+    notFound: 'No such label in this project.',
+    conflict: 'The project is archived (read-only).',
+  })
   remove(
     @Param('projectId', ParseUUIDPipe) projectId: string,
     @Param('labelId', ParseUUIDPipe) labelId: string,

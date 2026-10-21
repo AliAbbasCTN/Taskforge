@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import {
   IsEmail,
   IsNotEmpty,
@@ -20,11 +21,13 @@ import {
 export class RegisterDto {
   @IsEmail({}, { message: 'email must be a valid email address' })
   @MaxLength(255)
+  @ApiProperty({ example: 'ada@example.com', maxLength: 255 })
   email!: string;
 
   @IsString()
   @IsNotEmpty()
   @MaxLength(100)
+  @ApiProperty({ example: 'Ada Lovelace', maxLength: 100 })
   name!: string;
 
   @IsString()
@@ -36,6 +39,13 @@ export class RegisterDto {
   })
   @Matches(/(?=.*[A-Za-z])(?=.*\d)/, {
     message: 'password must contain at least one letter and one number',
+  })
+  @ApiProperty({
+    example: 'password1',
+    format: 'password',
+    minLength: 8,
+    maxLength: 72,
+    description: 'At least one letter and one number.',
   })
   password!: string;
 }

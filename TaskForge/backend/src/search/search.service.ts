@@ -57,13 +57,7 @@ export class SearchService {
         buildCountQuery(query.q, conditions),
       ),
       this.prisma.$queryRaw<PageRow[]>(
-        buildPageQuery(
-          query.q,
-          conditions,
-          orderBy,
-          query.page,
-          query.pageSize,
-        ),
+        buildPageQuery(query.q, conditions, orderBy, query.page, query.pageSize),
       ),
     ]);
 

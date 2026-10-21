@@ -63,12 +63,7 @@ describe('Activity log (e2e)', () => {
       .post('/auth/register')
       .send({ email, name, password: 'password1' })
       .expect(201);
-    return {
-      id: res.body.user.id as string,
-      email,
-      name,
-      token: res.body.tokens.accessToken as string,
-    };
+    return { id: res.body.user.id as string, email, name, token: res.body.tokens.accessToken as string };
   }
 
   /** lead (org ADMIN + project LEAD), member (org MEMBER + project MEMBER), outsider (no org). */
@@ -77,11 +72,7 @@ describe('Activity log (e2e)', () => {
     const member = await register('member@example.com', 'Max Member');
     const outsider = await register('outsider@example.com', 'Olga Outsider');
     const orgId = (
-      await api()
-        .post('/organizations')
-        .set('Authorization', bearer(lead.token))
-        .send({ name: 'Org' })
-        .expect(201)
+      await api().post('/organizations').set('Authorization', bearer(lead.token)).send({ name: 'Org' }).expect(201)
     ).body.id as string;
     await api()
       .post(`/organizations/${orgId}/members`)
@@ -90,24 +81,16 @@ describe('Activity log (e2e)', () => {
       .expect(201);
 
     const as = (user: { token: string }) => ({
-      get: (url: string) =>
-        api().get(url).set('Authorization', bearer(user.token)),
-      post: (url: string) =>
-        api().post(url).set('Authorization', bearer(user.token)),
-      patch: (url: string) =>
-        api().patch(url).set('Authorization', bearer(user.token)),
-      put: (url: string) =>
-        api().put(url).set('Authorization', bearer(user.token)),
-      del: (url: string) =>
-        api().delete(url).set('Authorization', bearer(user.token)),
+      get: (url: string) => api().get(url).set('Authorization', bearer(user.token)),
+      post: (url: string) => api().post(url).set('Authorization', bearer(user.token)),
+      patch: (url: string) => api().patch(url).set('Authorization', bearer(user.token)),
+      put: (url: string) => api().put(url).set('Authorization', bearer(user.token)),
+      del: (url: string) => api().delete(url).set('Authorization', bearer(user.token)),
     });
 
     const makeProject = async (name: string) => {
       const projectId = (
-        await as(lead)
-          .post(`/organizations/${orgId}/projects`)
-          .send({ name })
-          .expect(201)
+        await as(lead).post(`/organizations/${orgId}/projects`).send({ name }).expect(201)
       ).body.id as string;
       await as(lead)
         .post(`/organizations/${orgId}/projects/${projectId}/members`)
@@ -122,60 +105,29 @@ describe('Activity log (e2e)', () => {
       const projectPath = `/organizations/${orgId}/projects/${projectId}`;
       const boardPath = `${projectPath}/boards/${board.id}`;
       const createTask = async (title: string) =>
-        (
-          await as(lead)
-            .post(`${boardPath}/tasks`)
-            .send({ columnId: board.columns[0].id, title })
-            .expect(201)
-        ).body.id as string;
-      const feed = (
-        params: Record<string, string | number> = {},
-        user: { token: string } = lead,
-      ) => as(user).get(`${projectPath}/activity`).query(params);
+        (await as(lead).post(`${boardPath}/tasks`).send({ columnId: board.columns[0].id, title }).expect(201))
+          .body.id as string;
+      const feed = (params: Record<string, string | number> = {}, user: { token: string } = lead) =>
+        as(user).get(`${projectPath}/activity`).query(params);
       return { projectId, projectPath, board, boardPath, createTask, feed };
     };
 
-    return {
-      lead,
-      member,
-      outsider,
-      orgId,
-      as,
-      makeProject,
-      auditPath: `/organizations/${orgId}/audit-log`,
-    };
+    return { lead, member, outsider, orgId, as, makeProject, auditPath: `/organizations/${orgId}/audit-log` };
   }
 
   const messages = (res: request.Response) =>
-    (res.body.items as { actorName: string; message: string }[]).map(
-      (i) => `${i.actorName} ${i.message}`,
-    );
+    (res.body.items as { actorName: string; message: string }[]).map((i) => `${i.actorName} ${i.message}`);
 
   describe('recording', () => {
-    it("records a task's whole life, newest first, with names that survive deletion", async () => {
+    it('records a task\'s whole life, newest first, with names that survive deletion', async () => {
       const w = await world();
       const p = await w.makeProject('Apollo');
-      const [todo, inProgress] = p.board.columns as {
-        id: string;
-        name: string;
-      }[];
+      const [todo, inProgress] = p.board.columns as { id: string; name: string }[];
 
       const taskId = await p.createTask('Fix login');
-      await w
-        .as(w.lead)
-        .patch(`${p.boardPath}/tasks/${taskId}`)
-        .send({ title: 'Fix login redirect', assigneeId: w.member.id })
-        .expect(200);
-      await w
-        .as(w.lead)
-        .post(`${p.boardPath}/tasks/${taskId}/move`)
-        .send({ columnId: inProgress.id, position: 0 })
-        .expect(200);
-      await w
-        .as(w.member)
-        .post(`${p.boardPath}/tasks/${taskId}/comments`)
-        .send({ body: 'On it' })
-        .expect(201);
+      await w.as(w.lead).patch(`${p.boardPath}/tasks/${taskId}`).send({ title: 'Fix login redirect', assigneeId: w.member.id }).expect(200);
+      await w.as(w.lead).post(`${p.boardPath}/tasks/${taskId}/move`).send({ columnId: inProgress.id, position: 0 }).expect(200);
+      await w.as(w.member).post(`${p.boardPath}/tasks/${taskId}/comments`).send({ body: 'On it' }).expect(201);
       await w.as(w.lead).del(`${p.boardPath}/tasks/${taskId}`).expect(204);
 
       const res = await p.feed().expect(200);
@@ -202,40 +154,19 @@ describe('Activity log (e2e)', () => {
       await p.createTask('Other');
       const before = (await p.feed().expect(200)).body.total;
 
-      await w
-        .as(w.lead)
-        .patch(`${p.boardPath}/tasks/${taskId}`)
-        .send({})
-        .expect(400); // nothing to update
-      await w
-        .as(w.lead)
-        .del(`${p.boardPath}/tasks/00000000-0000-4000-8000-000000000000`)
-        .expect(404);
-      await w
-        .as(w.lead)
-        .post(`${p.boardPath}/tasks/${taskId}/move`)
-        .send({ columnId: p.board.columns[0].id, position: 1 })
-        .expect(200); // same column
+      await w.as(w.lead).patch(`${p.boardPath}/tasks/${taskId}`).send({}).expect(400); // nothing to update
+      await w.as(w.lead).del(`${p.boardPath}/tasks/00000000-0000-4000-8000-000000000000`).expect(404);
+      await w.as(w.lead).post(`${p.boardPath}/tasks/${taskId}/move`)
+        .send({ columnId: p.board.columns[0].id, position: 1 }).expect(200); // same column
 
       expect((await p.feed().expect(200)).body.total).toBe(before);
     });
 
     it('records membership and organization events in the audit trail', async () => {
       const w = await world();
-      await w
-        .as(w.lead)
-        .patch(`/organizations/${w.orgId}/members/${w.member.id}`)
-        .send({ role: 'MANAGER' })
-        .expect(200);
-      await w
-        .as(w.lead)
-        .patch(`/organizations/${w.orgId}`)
-        .send({ name: 'Org Renamed' })
-        .expect(200);
-      await w
-        .as(w.lead)
-        .del(`/organizations/${w.orgId}/members/${w.member.id}`)
-        .expect(204);
+      await w.as(w.lead).patch(`/organizations/${w.orgId}/members/${w.member.id}`).send({ role: 'MANAGER' }).expect(200);
+      await w.as(w.lead).patch(`/organizations/${w.orgId}`).send({ name: 'Org Renamed' }).expect(200);
+      await w.as(w.lead).del(`/organizations/${w.orgId}/members/${w.member.id}`).expect(204);
 
       const res = await w.as(w.lead).get(w.auditPath).expect(200);
 
@@ -250,16 +181,12 @@ describe('Activity log (e2e)', () => {
   });
 
   describe('the project feed', () => {
-    it("can show one task's timeline", async () => {
+    it('can show one task\'s timeline', async () => {
       const w = await world();
       const p = await w.makeProject('Apollo');
       const a = await p.createTask('Task A');
       const b = await p.createTask('Task B');
-      await w
-        .as(w.member)
-        .post(`${p.boardPath}/tasks/${a}/comments`)
-        .send({ body: 'hi' })
-        .expect(201);
+      await w.as(w.member).post(`${p.boardPath}/tasks/${a}/comments`).send({ body: 'hi' }).expect(201);
 
       const res = await p.feed({ taskId: a }).expect(200);
 
@@ -277,22 +204,18 @@ describe('Activity log (e2e)', () => {
         await p.createTask(title);
       }
 
-      const created = await p
-        .feed({ action: 'task.created', pageSize: 2, page: 1 })
-        .expect(200);
+      const created = await p.feed({ action: 'task.created', pageSize: 2, page: 1 }).expect(200);
       expect(created.body).toMatchObject({ total: 5, totalPages: 3 });
 
       const seen: string[] = [];
       for (const page of [1, 2, 3]) {
-        const res = await p
-          .feed({ action: 'task.created', pageSize: 2, page })
-          .expect(200);
+        const res = await p.feed({ action: 'task.created', pageSize: 2, page }).expect(200);
         seen.push(...(res.body.items as { id: string }[]).map((i) => i.id));
       }
       expect(new Set(seen).size).toBe(5);
     });
 
-    it("shows only that project's events, and is private to people who can see the project", async () => {
+    it('shows only that project\'s events, and is private to people who can see the project', async () => {
       const w = await world();
       const a = await w.makeProject('Project A');
       const b = await w.makeProject('Project B');
@@ -330,52 +253,28 @@ describe('Activity log (e2e)', () => {
       const a = await w.makeProject('Project A');
       const b = await w.makeProject('Project B');
       await a.createTask('In A');
-      await w
-        .as(w.member)
-        .post(`${b.boardPath}/tasks`)
-        .send({ columnId: b.board.columns[0].id, title: 'In B' })
-        .expect(201);
+      await w.as(w.member).post(`${b.boardPath}/tasks`).send({ columnId: b.board.columns[0].id, title: 'In B' }).expect(201);
 
-      const all = await w
-        .as(w.lead)
-        .get(w.auditPath)
-        .query({ action: 'task.created' })
-        .expect(200);
+      const all = await w.as(w.lead).get(w.auditPath).query({ action: 'task.created' }).expect(200);
       expect(messages(all).sort()).toEqual([
         'Lena Lead created task “In A”',
         'Max Member created task “In B”',
       ]);
 
-      const byProject = await w
-        .as(w.lead)
-        .get(w.auditPath)
-        .query({ projectId: b.projectId, action: 'task.created' })
-        .expect(200);
+      const byProject = await w.as(w.lead).get(w.auditPath).query({ projectId: b.projectId, action: 'task.created' }).expect(200);
       expect(messages(byProject)).toEqual(['Max Member created task “In B”']);
 
-      const byActor = await w
-        .as(w.lead)
-        .get(w.auditPath)
-        .query({ actorId: w.member.id, action: 'task.created' })
-        .expect(200);
+      const byActor = await w.as(w.lead).get(w.auditPath).query({ actorId: w.member.id, action: 'task.created' }).expect(200);
       expect(byActor.body.total).toBe(1);
 
-      const future = await w
-        .as(w.lead)
-        .get(w.auditPath)
-        .query({ from: '2999-01-01' })
-        .expect(200);
+      const future = await w.as(w.lead).get(w.auditPath).query({ from: '2999-01-01' }).expect(200);
       expect(future.body.total).toBe(0);
     });
 
-    it("is tenant-isolated: another organization's admin cannot read it", async () => {
+    it('is tenant-isolated: another organization\'s admin cannot read it', async () => {
       const w = await world();
       const other = await register('other-admin@example.com', 'Other Admin');
-      await api()
-        .post('/organizations')
-        .set('Authorization', bearer(other.token))
-        .send({ name: 'Other Org' })
-        .expect(201);
+      await api().post('/organizations').set('Authorization', bearer(other.token)).send({ name: 'Other Org' }).expect(201);
 
       await w.as(other).get(w.auditPath).expect(404);
     });
@@ -401,27 +300,16 @@ describe('Activity log (e2e)', () => {
       expect(texts).toContain('Lena Lead created project “Apollo”');
     });
 
-    it("stays attributable after the actor's account is deleted", async () => {
+    it('stays attributable after the actor\'s account is deleted', async () => {
       const w = await world();
       const p = await w.makeProject('Apollo');
       const taskId = await p.createTask('Task');
-      await w
-        .as(w.member)
-        .post(`${p.boardPath}/tasks/${taskId}/comments`)
-        .send({ body: 'hi' })
-        .expect(201);
+      await w.as(w.member).post(`${p.boardPath}/tasks/${taskId}/comments`).send({ body: 'hi' }).expect(201);
 
       await prisma.user.delete({ where: { id: w.member.id } });
 
-      const res = await w
-        .as(w.lead)
-        .get(w.auditPath)
-        .query({ action: 'comment.created' })
-        .expect(200);
-      expect(res.body.items[0]).toMatchObject({
-        actorId: null,
-        actorName: 'Max Member',
-      });
+      const res = await w.as(w.lead).get(w.auditPath).query({ action: 'comment.created' }).expect(200);
+      expect(res.body.items[0]).toMatchObject({ actorId: null, actorName: 'Max Member' });
     });
 
     it('the database itself refuses to edit an entry', async () => {
@@ -432,13 +320,7 @@ describe('Activity log (e2e)', () => {
       await expect(
         prisma.$executeRaw`UPDATE activity_logs SET action = 'task.deleted' WHERE id = ${entry.id}::uuid`,
       ).rejects.toThrow(/append-only/);
-      expect(
-        (
-          await prisma.activityLog.findUniqueOrThrow({
-            where: { id: entry.id },
-          })
-        ).action,
-      ).toBe(entry.action);
+      expect((await prisma.activityLog.findUniqueOrThrow({ where: { id: entry.id } })).action).toBe(entry.action);
     });
   });
 });

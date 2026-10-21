@@ -24,11 +24,7 @@ const dto = (overrides: Partial<SearchTasksQueryDto> = {}) =>
 
 const build = (overrides: Partial<SearchTasksQueryDto> = {}) => {
   const query = dto(overrides);
-  const conditions = buildSearchConditions(
-    PROJECT,
-    query,
-    new Date('2026-10-17T15:30:00Z'),
-  );
+  const conditions = buildSearchConditions(PROJECT, query, new Date('2026-10-17T15:30:00Z'));
   return {
     count: buildCountQuery(query.q, conditions),
     page: buildPageQuery(
@@ -88,14 +84,7 @@ describe('task search SQL', () => {
     it('adds one condition per filter', () => {
       const all = buildSearchConditions(
         PROJECT,
-        dto({
-          boardId: ID,
-          columnId: ID,
-          priority: 'URGENT',
-          assigneeId: ID,
-          labelId: ID,
-          overdue: true,
-        }),
+        dto({ boardId: ID, columnId: ID, priority: 'URGENT', assigneeId: ID, labelId: ID, overdue: true }),
       );
       expect(all).toHaveLength(8);
       const text = all.map((c) => c.text).join(' | ');
@@ -125,9 +114,7 @@ describe('task search SQL', () => {
       buildSearchOrderBy(sortBy, dir).text;
 
     it('ranks by relevance by default, newest first on ties', () => {
-      expect(order('relevance')).toContain(
-        'ts_rank_cd(t.search_vector, q.query) DESC',
-      );
+      expect(order('relevance')).toContain('ts_rank_cd(t.search_vector, q.query) DESC');
       expect(order('relevance', 'asc')).toContain('DESC'); // sortOrder is ignored
     });
 
@@ -135,12 +122,8 @@ describe('task search SQL', () => {
       expect(order('createdAt', 'asc')).toBe('t.created_at ASC, t.id ASC');
       expect(order('title', 'desc')).toBe('t.title DESC, t.id ASC');
       expect(order('priority', 'desc')).toBe('t.priority DESC, t.id ASC');
-      expect(order('dueDate', 'asc')).toBe(
-        't.due_date ASC NULLS LAST, t.id ASC',
-      );
-      expect(order('dueDate', 'desc')).toBe(
-        't.due_date DESC NULLS LAST, t.id ASC',
-      );
+      expect(order('dueDate', 'asc')).toBe('t.due_date ASC NULLS LAST, t.id ASC');
+      expect(order('dueDate', 'desc')).toBe('t.due_date DESC NULLS LAST, t.id ASC');
     });
   });
 
@@ -155,9 +138,7 @@ describe('task search SQL', () => {
 
     it('computes the expensive highlights only for the outer (paged) rows', () => {
       const { page, count } = build();
-      expect(page.text.indexOf('matches AS')).toBeLessThan(
-        page.text.indexOf('ts_headline'),
-      );
+      expect(page.text.indexOf('matches AS')).toBeLessThan(page.text.indexOf('ts_headline'));
       expect(page.text).not.toContain('LIMIT');
       expect(count.text).not.toContain('ts_headline');
       expect(count.text).toContain('count(*)::int AS total');

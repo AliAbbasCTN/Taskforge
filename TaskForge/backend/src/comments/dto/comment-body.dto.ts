@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
 import { trimString } from '../../common/utils/trim-string';
@@ -17,5 +18,6 @@ export class CommentBodyDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(5000)
+  @ApiProperty({ example: 'Reproduced on Safari too.', maxLength: 5000, description: 'Plain text; never rendered as HTML.' })
   body!: string;
 }

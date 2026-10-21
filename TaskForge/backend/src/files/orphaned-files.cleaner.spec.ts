@@ -3,8 +3,7 @@ import { OrphanedFilesCleaner } from './orphaned-files.cleaner';
 import { StorageService, StoredObjectInfo } from './storage/storage.service';
 
 const NOW = new Date('2026-10-16T12:00:00.000Z');
-const hoursAgo = (hours: number) =>
-  new Date(NOW.getTime() - hours * 3600 * 1000);
+const hoursAgo = (hours: number) => new Date(NOW.getTime() - hours * 3600 * 1000);
 
 function build(objects: StoredObjectInfo[], knownKeys: string[]) {
   const deleted: string[] = [];
@@ -21,11 +20,7 @@ function build(objects: StoredObjectInfo[], knownKeys: string[]) {
   const queries: string[][] = [];
   const prisma = {
     attachment: {
-      findMany: async ({
-        where,
-      }: {
-        where: { storageKey: { in: string[] } };
-      }) => {
+      findMany: async ({ where }: { where: { storageKey: { in: string[] } } }) => {
         queries.push(where.storageKey.in);
         return where.storageKey.in
           .filter((key) => knownKeys.includes(key))

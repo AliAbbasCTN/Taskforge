@@ -42,9 +42,7 @@ export class OrphanedFilesCleaner {
     private readonly prisma: PrismaService,
   ) {}
 
-  async sweep(
-    now: Date = new Date(),
-  ): Promise<{ scanned: number; deleted: number }> {
+  async sweep(now: Date = new Date()): Promise<{ scanned: number; deleted: number }> {
     const cutoff = now.getTime() - ORPHAN_GRACE_PERIOD_MS;
     let scanned = 0;
     let deleted = 0;

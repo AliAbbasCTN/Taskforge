@@ -1,3 +1,4 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
 import { ProjectStatus } from '@prisma/client';
@@ -17,6 +18,11 @@ import { ProjectStatus } from '@prisma/client';
 export class ListProjectsQueryDto {
   @IsOptional()
   @IsEnum(ProjectStatus)
+  @ApiPropertyOptional({
+    enum: ProjectStatus,
+    enumName: 'ProjectStatus',
+    default: ProjectStatus.ACTIVE,
+  })
   status?: ProjectStatus;
 
   /** Trimmed; an empty value means "no search". */
@@ -26,5 +32,10 @@ export class ListProjectsQueryDto {
   )
   @IsString()
   @MaxLength(100)
+  @ApiPropertyOptional({
+    maxLength: 100,
+    example: 'website',
+    description: 'Case-insensitive match on name or description.',
+  })
   search?: string;
 }

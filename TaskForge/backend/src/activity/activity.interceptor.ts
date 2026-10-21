@@ -80,12 +80,7 @@ export class ActivityInterceptor implements NestInterceptor {
         next.handle().pipe(
           mergeMap((result) =>
             from(
-              this.record(action, actorId, {
-                params,
-                body,
-                response: asObject(result),
-                before,
-              }),
+              this.record(action, actorId, { params, body, response: asObject(result), before }),
             ).pipe(mergeMap(() => [result])),
           ),
         ),
@@ -105,9 +100,7 @@ export class ActivityInterceptor implements NestInterceptor {
     try {
       return await this.snapshots.load(kind, params, body);
     } catch (error) {
-      this.logger.warn(
-        `Could not take the "${kind}" snapshot for ${action}: ${String(error)}`,
-      );
+      this.logger.warn(`Could not take the "${kind}" snapshot for ${action}: ${String(error)}`);
       return null;
     }
   }
@@ -121,9 +114,7 @@ export class ActivityInterceptor implements NestInterceptor {
       const drafts = ACTIVITY_SPECS[action].describe(context);
       await this.activity.record(actorId, drafts);
     } catch (error) {
-      this.logger.error(
-        `Could not record activity "${action}": ${String(error)}`,
-      );
+      this.logger.error(`Could not record activity "${action}": ${String(error)}`);
     }
   }
 }

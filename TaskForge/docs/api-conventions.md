@@ -108,4 +108,10 @@ GET /tasks?page=1&pageSize=20&sortBy=createdAt&sortOrder=desc&status=IN_PROGRESS
 
 ## Documentation
 
-Every endpoint will eventually carry Swagger decorators (`@ApiOperation`, `@ApiResponse`, etc.) — introduced in Phase 16, but written incrementally as good practice once Swagger is set up, not bolted on all at once at the end.
+Every endpoint is documented in the OpenAPI document served at `/docs` (Phase 16). The rules for keeping it that way:
+
+- Every route has `@ApiEndpoint({ summary, description?, ok | created | noContent, ... })` and its controller has `@ApiTags(...)` and `@ApiBearerAuth(BEARER_AUTH_NAME)` unless it is public.
+- Every request DTO property has `@ApiProperty` / `@ApiPropertyOptional` with a realistic `example`.
+- Every response has a model class in `src/docs/models/`.
+- Permissions are documented by `@RequirePermission(...)` itself, and audit entries by `@LogsActivity(...)` - never repeat them by hand.
+- `test/docs.e2e-spec.ts` fails if a route is added without a summary/tag/security, or if a real response stops matching its model.

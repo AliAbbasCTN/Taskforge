@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { ArrayMaxSize, IsArray, IsUUID } from 'class-validator';
 
 /**
@@ -13,5 +14,11 @@ export class SetTaskLabelsDto {
   @IsArray()
   @ArrayMaxSize(20)
   @IsUUID('all', { each: true })
+  @ApiProperty({
+    type: 'array',
+    items: { type: 'string', format: 'uuid' },
+    maxItems: 20,
+    description: 'The COMPLETE list of label ids the task should have. An empty array removes every label.',
+  })
   labelIds!: string[];
 }

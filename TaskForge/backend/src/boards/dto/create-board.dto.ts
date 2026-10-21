@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsNotEmpty, IsString, MaxLength, MinLength } from 'class-validator';
 import { trimString } from '../../common/utils/trim-string';
@@ -9,5 +10,6 @@ export class CreateBoardDto {
   @IsNotEmpty()
   @MinLength(2)
   @MaxLength(150)
+  @ApiProperty({ example: 'Sprint 12', minLength: 2, maxLength: 150 })
   name!: string;
 }

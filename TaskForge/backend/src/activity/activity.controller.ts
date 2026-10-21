@@ -1,3 +1,8 @@
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiEndpoint, BEARER_AUTH_NAME } from '../common/swagger';
+import {
+  PaginatedActivityResponse,
+} from '../docs/models';
 import {
   Controller,
   Get,
@@ -24,22 +29,25 @@ import { ListActivityQueryDto } from './dto/list-activity-query.dto';
  * project itself; a project you cannot see is a 404). `taskId` narrows it to
  * one task's timeline - that is how the task panel shows its history.
  */
+@ApiTags('Activity')
+@ApiBearerAuth(BEARER_AUTH_NAME)
 @Controller('organizations/:id/projects/:projectId/activity')
 @UseGuards(JwtAuthGuard, OrganizationMembershipGuard, ProjectGuard)
 export class ProjectActivityController {
   constructor(private readonly activityService: ActivityService) {}
 
   @Get()
+  @ApiEndpoint({
+    summary: 'Project activity feed',
+    description: 'What has been happening in this project, newest first. Anyone who can see the project can read it. Pass `taskId` to get one task\'s timeline. Entries are snapshots: names are as they were AT THE TIME, so the feed stays accurate after renames and deletions.',
+    ok: PaginatedActivityResponse,
+  })
   list(
     @Param('id', ParseUUIDPipe) organizationId: string,
     @Param('projectId', ParseUUIDPipe) projectId: string,
     @Query() query: ListActivityQueryDto,
   ) {
-    return this.activityService.listForProject(
-      organizationId,
-      projectId,
-      query,
-    );
+    return this.activityService.listForProject(organizationId, projectId, query);
   }
 }
 
@@ -53,17 +61,20 @@ export class ProjectActivityController {
  * and what happened in every project. Read-only, with no way to edit or delete
  * entries.
  */
+@ApiTags('Activity')
+@ApiBearerAuth(BEARER_AUTH_NAME)
 @Controller('organizations/:id/audit-log')
-@UseGuards(
-  JwtAuthGuard,
-  OrganizationMembershipGuard,
-  OrganizationPermissionGuard,
-)
+@UseGuards(JwtAuthGuard, OrganizationMembershipGuard, OrganizationPermissionGuard)
 export class AuditLogController {
   constructor(private readonly activityService: ActivityService) {}
 
   @Get()
   @RequirePermission(Permission.AuditLogRead)
+  @ApiEndpoint({
+    summary: 'Organization audit trail',
+    description: 'Every recorded action across all projects plus membership and settings changes, newest first. **ADMIN only.** Read-only: there is no way to edit or delete entries (a database trigger enforces this).',
+    ok: PaginatedActivityResponse,
+  })
   list(
     @Param('id', ParseUUIDPipe) organizationId: string,
     @Query() query: ListActivityQueryDto,

@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsNotEmpty, IsString, Matches, MaxLength } from 'class-validator';
 import { trimString } from '../../common/utils/trim-string';
@@ -15,11 +16,13 @@ export class CreateLabelDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(50)
+  @ApiProperty({ example: 'Bug', maxLength: 50 })
   name!: string;
 
   @IsString()
   @Matches(/^#[0-9a-fA-F]{6}$/, {
     message: 'color must be a hex colour like #2f4bdb',
   })
+  @ApiProperty({ example: '#e03131', pattern: '^#[0-9a-fA-F]{6}$', description: 'Hex colour, #RRGGBB.' })
   color!: string;
 }

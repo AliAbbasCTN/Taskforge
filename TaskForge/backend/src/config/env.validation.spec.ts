@@ -50,4 +50,15 @@ describe('validateEnv - file storage', () => {
       validateEnv({ ...baseEnv, UPLOAD_MAX_FILE_SIZE_MB: '25' }),
     ).not.toThrow();
   });
+
+  it('accepts "true" or "false" for SWAGGER_ENABLED and rejects anything else', () => {
+    for (const value of ['true', 'false']) {
+      expect(() =>
+        validateEnv({ ...baseEnv, SWAGGER_ENABLED: value }),
+      ).not.toThrow();
+    }
+    expect(() => validateEnv({ ...baseEnv, SWAGGER_ENABLED: 'yes' })).toThrow(
+      'SWAGGER_ENABLED must be "true" or "false"',
+    );
+  });
 });

@@ -4,10 +4,7 @@ import { OrganizationMembershipGuard } from '../organizations/guards/organizatio
 import { OrganizationPermissionGuard } from '../organizations/guards/organization-permission.guard';
 import { ProjectGuard } from '../projects/guards/project.guard';
 import { ActivitySnapshotService } from './activity-snapshot.service';
-import {
-  AuditLogController,
-  ProjectActivityController,
-} from './activity.controller';
+import { AuditLogController, ProjectActivityController } from './activity.controller';
 import { ActivityInterceptor } from './activity.interceptor';
 import { ActivityService } from './activity.service';
 

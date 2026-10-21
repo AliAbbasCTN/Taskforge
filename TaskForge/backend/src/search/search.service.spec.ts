@@ -45,12 +45,7 @@ describe('SearchService', () => {
   it('returns matches in SEARCH order (not database order) with score and highlights', async () => {
     script(2, [
       { id: 'b', score: 0.9, titleHighlight: '⟦Login⟧ bug', snippet: null },
-      {
-        id: 'a',
-        score: 0.4,
-        titleHighlight: 'Fix ⟦login⟧',
-        snippet: 'about ⟦login⟧',
-      },
+      { id: 'a', score: 0.4, titleHighlight: 'Fix ⟦login⟧', snippet: 'about ⟦login⟧' },
     ]);
     // Prisma returns them in arbitrary order.
     prisma.task.findMany.mockResolvedValue([task('a'), task('b')]);
@@ -66,15 +61,10 @@ describe('SearchService', () => {
     });
     // The join-table shape is flattened like every other task endpoint.
     expect(result.items[0].labels).toEqual([{ id: 'l1', name: 'bug' }]);
-    expect(result).toMatchObject({
-      total: 2,
-      page: 1,
-      pageSize: 20,
-      totalPages: 1,
-    });
+    expect(result).toMatchObject({ total: 2, page: 1, pageSize: 20, totalPages: 1 });
   });
 
-  it("loads the page's tasks in ONE query by id (no N+1)", async () => {
+  it('loads the page\'s tasks in ONE query by id (no N+1)', async () => {
     script(2, [
       { id: 'a', score: 1, titleHighlight: 'a', snippet: null },
       { id: 'b', score: 1, titleHighlight: 'b', snippet: null },
@@ -103,12 +93,7 @@ describe('SearchService', () => {
 
     const result = await service.searchTasks(PROJECT, query({ page: 9 }));
 
-    expect(result).toMatchObject({
-      items: [],
-      total: 5,
-      page: 9,
-      totalPages: 1,
-    });
+    expect(result).toMatchObject({ items: [], total: 5, page: 9, totalPages: 1 });
   });
 
   it('drops a task that was deleted between the two queries instead of failing', async () => {

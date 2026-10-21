@@ -26,8 +26,9 @@ TaskForge is a multi-tenant project management platform inspired by tools like J
 **Phase 13 — File Uploads** ✅ Complete
 **Phase 14 — Search & Filtering** ✅ Complete
 **Phase 15 — Activity Logs & Audit Trail** ✅ Complete
+**Phase 16 — Swagger / API Documentation** ✅ Complete
 
-TaskForge now keeps a permanent record of **who did what, and when**: a per-project **activity feed** and per-task timeline for members, and an **organization audit trail** for admins. Entries are snapshots that outlive what they describe, are append-only (enforced by a database trigger), and are recorded by a decorator + interceptor so services stay untouched. See [`docs/phase-15-concepts.md`](./docs/phase-15-concepts.md). Earlier: PostgreSQL full-text task search ([`docs/phase-14-concepts.md`](./docs/phase-14-concepts.md)) and file attachments ([`docs/phase-13-concepts.md`](./docs/phase-13-concepts.md)). See [`docs/`](./docs) for architecture, and [Setup](#setup) below to run it.
+The whole API is now **documented and explorable**: run the backend and open **http://localhost:3000/docs** for an interactive reference (every route, every request body, every response model, every error, with a built-in **Authorize** button for your token). It is generated from the code itself and checked by tests, so it cannot quietly drift. See [`docs/phase-16-concepts.md`](./docs/phase-16-concepts.md). Before that, TaskForge gained a permanent record of **who did what, and when**: a per-project **activity feed** and per-task timeline for members, and an **organization audit trail** for admins. Entries are snapshots that outlive what they describe, are append-only (enforced by a database trigger), and are recorded by a decorator + interceptor so services stay untouched. See [`docs/phase-15-concepts.md`](./docs/phase-15-concepts.md). Earlier: PostgreSQL full-text task search ([`docs/phase-14-concepts.md`](./docs/phase-14-concepts.md)) and file attachments ([`docs/phase-13-concepts.md`](./docs/phase-13-concepts.md)). See [`docs/`](./docs) for architecture, and [Setup](#setup) below to run it.
 
 ---
 
@@ -97,6 +98,7 @@ See [`docs/folder-structure.md`](./docs/folder-structure.md).
 - [`docs/phase-12-concepts.md`](./docs/phase-12-concepts.md) — concepts learned in Phase 12 (message queues, retries and backoff, idempotency, graceful degradation, scheduled jobs, the dual-write problem, monitoring background work)
 - [`docs/phase-13-concepts.md`](./docs/phase-13-concepts.md) — concepts learned in Phase 13 (never trusting uploads, magic-number validation, server-generated storage keys, path traversal, the storage abstraction, S3 and credentials, the two-system consistency problem, orphan cleanup)
 - [`docs/phase-14-concepts.md`](./docs/phase-14-concepts.md) — concepts learned in Phase 14 (full-text search, tsvector/tsquery, stemming, GIN indexes, trigger-maintained search columns, safe raw SQL, XSS-safe highlighting, choosing between FTS and substring search, graceful degradation when Redis is down)
+- [`docs/phase-16-concepts.md`](./docs/phase-16-concepts.md) — concepts learned in Phase 16 (OpenAPI, documentation generated from code, request vs response models, documenting auth and errors once, post-processing a document, contract tests, why docs are off in production by default)
 - [`docs/phase-15-concepts.md`](./docs/phase-15-concepts.md) — concepts learned in Phase 15 (activity vs audit, snapshot-based history without foreign keys, append-only enforcement with triggers, decorator + interceptor recording, pure describer functions, best-effort vs transactional logging)
 
 ## Setup

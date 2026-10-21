@@ -76,10 +76,7 @@ export class ActivityService {
     projectId: string,
     query: ListActivityQueryDto,
   ) {
-    return this.list(
-      { organizationId, projectId, ...this.filters(query) },
-      query,
-    );
+    return this.list({ organizationId, projectId, ...this.filters(query) }, query);
   }
 
   listForOrganization(organizationId: string, query: ListActivityQueryDto) {

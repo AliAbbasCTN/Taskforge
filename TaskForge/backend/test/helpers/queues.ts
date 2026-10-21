@@ -42,10 +42,7 @@ export async function settleNotifications(
 
   for (;;) {
     const counts = await queue.getJobCounts('waiting', 'active', 'delayed');
-    if (
-      (counts.waiting ?? 0) + (counts.active ?? 0) + (counts.delayed ?? 0) ===
-      0
-    ) {
+    if ((counts.waiting ?? 0) + (counts.active ?? 0) + (counts.delayed ?? 0) === 0) {
       return;
     }
     if (Date.now() > deadline) {

@@ -1,4 +1,5 @@
-import { SetMetadata } from '@nestjs/common';
+import { applyDecorators, SetMetadata } from '@nestjs/common';
+import { ApiExtension } from '@nestjs/swagger';
 import { LoggedActivityAction } from './activity.types';
 
 export const LOGS_ACTIVITY_KEY = 'activity:logs';
@@ -14,6 +15,12 @@ export const LOGS_ACTIVITY_KEY = 'activity:logs';
  * The matching `ActivityInterceptor` does the work; what is recorded for each
  * action is defined in `ACTIVITY_SPECS`. Same pattern as Phase 11's
  * `@PublishesChanges`: declare WHAT in the controller, keep HOW out of it.
+ *
+ * PHASE 16: also published as an `x-activity-action` extension, so the API
+ * reference tells a reader which audit-trail entry a route produces.
  */
 export const LogsActivity = (action: LoggedActivityAction) =>
-  SetMetadata(LOGS_ACTIVITY_KEY, action);
+  applyDecorators(
+    SetMetadata(LOGS_ACTIVITY_KEY, action),
+    ApiExtension('x-activity-action', action),
+  );

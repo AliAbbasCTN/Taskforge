@@ -1,3 +1,11 @@
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiEndpoint, BEARER_AUTH_NAME } from '../common/swagger';
+import {
+  MarkAllReadResponse,
+  NotificationResponse,
+  PaginatedNotificationResponse,
+  UnreadCountResponse,
+} from '../docs/models';
 import {
   Controller,
   Get,
@@ -29,12 +37,19 @@ import { NotificationsService } from './notifications.service';
  *   POST /notifications/read-all                 - mark everything read
  *   POST /notifications/:id/read                 - mark one read
  */
+@ApiTags('Notifications')
+@ApiBearerAuth(BEARER_AUTH_NAME)
 @Controller('notifications')
 @UseGuards(JwtAuthGuard)
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
   @Get()
+  @ApiEndpoint({
+    summary: 'List your notifications',
+    description: 'Your personal inbox across ALL organizations, newest first. Use `unread=true` for unread only.',
+    ok: PaginatedNotificationResponse,
+  })
   list(
     @Query() query: ListNotificationsQueryDto,
     @CurrentUser() user: AuthenticatedUser,
@@ -43,18 +58,33 @@ export class NotificationsController {
   }
 
   @Get('unread-count')
+  @ApiEndpoint({
+    summary: 'Count unread notifications',
+    description: 'The number for the badge.',
+    ok: UnreadCountResponse,
+  })
   unreadCount(@CurrentUser() user: AuthenticatedUser) {
     return this.notificationsService.unreadCount(user.id);
   }
 
   @Post('read-all')
   @HttpCode(HttpStatus.OK)
+  @ApiEndpoint({
+    summary: 'Mark all notifications read',
+    ok: MarkAllReadResponse,
+  })
   markAllRead(@CurrentUser() user: AuthenticatedUser) {
     return this.notificationsService.markAllRead(user.id);
   }
 
   @Post(':id/read')
   @HttpCode(HttpStatus.OK)
+  @ApiEndpoint({
+    summary: 'Mark one notification read',
+    description: 'Idempotent: marking an already-read notification returns it unchanged.',
+    ok: NotificationResponse,
+    notFound: 'No such notification - or it is not yours (the same answer for both).',
+  })
   markRead(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthenticatedUser,

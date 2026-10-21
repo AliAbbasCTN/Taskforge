@@ -1,3 +1,4 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsBoolean, IsEnum, IsOptional, IsUUID } from 'class-validator';
 import { TaskPriority } from '@prisma/client';
@@ -46,19 +47,26 @@ export const toOptionalBoolean = ({
 export class TaskFilterDto {
   @IsOptional()
   @IsEnum(TaskPriority)
+  @ApiPropertyOptional({ enum: TaskPriority, enumName: 'TaskPriority' })
   priority?: TaskPriority;
 
   @IsOptional()
   @IsUUID()
+  @ApiPropertyOptional({ format: 'uuid', description: 'Only tasks assigned to this user.' })
   assigneeId?: string;
 
   @IsOptional()
   @IsUUID()
+  @ApiPropertyOptional({ format: 'uuid', description: 'Only tasks with this label.' })
   labelId?: string;
 
   /** Only tasks whose due date is before today (UTC). */
   @IsOptional()
   @Transform(toOptionalBoolean)
   @IsBoolean()
+  @ApiPropertyOptional({
+    type: Boolean,
+    description: 'true: only overdue tasks. false: only tasks that are not.',
+  })
   overdue?: boolean;
 }

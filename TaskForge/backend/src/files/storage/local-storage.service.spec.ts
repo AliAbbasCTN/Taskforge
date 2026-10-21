@@ -1,11 +1,4 @@
-import {
-  mkdtemp,
-  readFile,
-  rm,
-  writeFile,
-  utimes,
-  mkdir,
-} from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile, utimes, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { LocalStorageService } from './local-storage.service';
@@ -33,11 +26,7 @@ describe('LocalStorageService', () => {
   });
 
   it('stores bytes and reads them back, creating folders as needed', async () => {
-    await storage.put(
-      'attachments/o/p/t/file.txt',
-      Buffer.from('hello'),
-      'text/plain',
-    );
+    await storage.put('attachments/o/p/t/file.txt', Buffer.from('hello'), 'text/plain');
     const stream = await storage.get('attachments/o/p/t/file.txt');
     expect((await readAll(stream)).toString()).toBe('hello');
   });
@@ -45,9 +34,7 @@ describe('LocalStorageService', () => {
   it('replaces an existing object and leaves no temporary files behind', async () => {
     await storage.put('attachments/a.txt', Buffer.from('one'), 'text/plain');
     await storage.put('attachments/a.txt', Buffer.from('two'), 'text/plain');
-    expect(
-      (await readAll(await storage.get('attachments/a.txt'))).toString(),
-    ).toBe('two');
+    expect((await readAll(await storage.get('attachments/a.txt'))).toString()).toBe('two');
 
     const keys: string[] = [];
     for await (const object of storage.listKeys('')) {
@@ -63,9 +50,7 @@ describe('LocalStorageService', () => {
   });
 
   it('treats deleting a missing object as success', async () => {
-    await expect(
-      storage.delete('attachments/missing.txt'),
-    ).resolves.toBeUndefined();
+    await expect(storage.delete('attachments/missing.txt')).resolves.toBeUndefined();
   });
 
   it('deletes an object', async () => {
@@ -80,12 +65,8 @@ describe('LocalStorageService', () => {
     await expect(
       storage.put('../escape.txt', Buffer.from('x'), 'text/plain'),
     ).rejects.toThrow('Invalid storage key');
-    await expect(storage.get('../../etc/passwd')).rejects.toThrow(
-      'Invalid storage key',
-    );
-    await expect(storage.delete('/etc/passwd')).rejects.toThrow(
-      'Invalid storage key',
-    );
+    await expect(storage.get('../../etc/passwd')).rejects.toThrow('Invalid storage key');
+    await expect(storage.delete('/etc/passwd')).rejects.toThrow('Invalid storage key');
   });
 
   it('lists keys under a prefix with their modification time; an empty store lists nothing', async () => {

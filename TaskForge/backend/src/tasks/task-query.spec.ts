@@ -66,12 +66,7 @@ describe('buildTaskFilterWhere', () => {
 
 describe('buildTaskOrderBy', () => {
   it('always ends with an id tie-breaker so paging is stable', () => {
-    for (const field of [
-      'createdAt',
-      'dueDate',
-      'priority',
-      'title',
-    ] as const) {
+    for (const field of ['createdAt', 'dueDate', 'priority', 'title'] as const) {
       const orderBy = buildTaskOrderBy(field, 'asc');
       expect(orderBy[orderBy.length - 1]).toEqual({ id: 'asc' });
     }

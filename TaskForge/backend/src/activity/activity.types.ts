@@ -43,10 +43,7 @@ export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];
 export type DerivedActivityAction = 'task.assigned' | 'task.unassigned';
 
 /** Actions a controller method can declare with `@LogsActivity`. */
-export type LoggedActivityAction = Exclude<
-  ActivityAction,
-  DerivedActivityAction
->;
+export type LoggedActivityAction = Exclude<ActivityAction, DerivedActivityAction>;
 
 export type ActivityTargetType =
   | 'organization'

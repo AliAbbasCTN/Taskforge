@@ -1,3 +1,4 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsIn,
@@ -28,34 +29,44 @@ import { ACTIVITY_ACTIONS, ActivityAction } from '../activity.types';
 export class ListActivityQueryDto {
   @IsOptional()
   @IsIn(ACTIVITY_ACTIONS)
+  @ApiPropertyOptional({ enum: [...ACTIVITY_ACTIONS], example: 'task.moved' })
   action?: ActivityAction;
 
   @IsOptional()
   @IsUUID()
+  @ApiPropertyOptional({ format: 'uuid', description: 'Only actions by this user.' })
   actorId?: string;
 
   @IsOptional()
   @IsUUID()
+  @ApiPropertyOptional({ format: 'uuid', description: 'Only actions on this task.' })
   taskId?: string;
 
   @IsOptional()
   @IsUUID()
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description: 'Audit trail only: narrow to one project. The project feed ignores it.',
+  })
   projectId?: string;
 
   /** Inclusive lower bound, e.g. `2026-10-01` or `2026-10-01T09:00:00Z`. */
   @IsOptional()
   @IsISO8601()
+  @ApiPropertyOptional({ example: '2026-10-01', description: 'Inclusive lower bound (ISO 8601).' })
   from?: string;
 
   /** Inclusive upper bound. A bare date means the START of that day. */
   @IsOptional()
   @IsISO8601()
+  @ApiPropertyOptional({ example: '2026-10-31', description: 'Inclusive upper bound. A bare date means the START of that day.' })
   to?: string;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @ApiPropertyOptional({ minimum: 1, default: 1, description: 'Page number, starting at 1.' })
   page: number = 1;
 
   @IsOptional()
@@ -63,5 +74,11 @@ export class ListActivityQueryDto {
   @IsInt()
   @Min(1)
   @Max(MAX_PAGE_SIZE)
+  @ApiPropertyOptional({
+    minimum: 1,
+    maximum: MAX_PAGE_SIZE,
+    default: DEFAULT_PAGE_SIZE,
+    description: 'Items per page.',
+  })
   pageSize: number = DEFAULT_PAGE_SIZE;
 }

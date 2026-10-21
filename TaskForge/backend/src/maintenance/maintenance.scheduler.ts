@@ -46,7 +46,9 @@ export class MaintenanceScheduler
   private stopped = false;
   private failures = 0;
 
-  constructor(@InjectQueue(MAINTENANCE_QUEUE) private readonly queue: Queue) {}
+  constructor(
+    @InjectQueue(MAINTENANCE_QUEUE) private readonly queue: Queue,
+  ) {}
 
   async onApplicationBootstrap(): Promise<void> {
     await this.register();
@@ -84,9 +86,7 @@ export class MaintenanceScheduler
       // Loud the first time; later retries are a one-line reminder.
       const message = `Could not register the maintenance schedules (is Redis up?): ${String(error)}`;
       if (this.failures === 1) {
-        this.logger.error(
-          `${message}. Retrying every ${this.retryDelayMs / 1000}s.`,
-        );
+        this.logger.error(`${message}. Retrying every ${this.retryDelayMs / 1000}s.`);
       } else {
         this.logger.warn(`${message} (attempt ${this.failures})`);
       }

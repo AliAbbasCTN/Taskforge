@@ -130,10 +130,7 @@ describe('NotificationsService', () => {
 
   describe('deliver (what the worker runs)', () => {
     it('stores the notification under the id chosen at enqueue time, then pushes it live', async () => {
-      const created = {
-        id: 'notif-1',
-        message: 'Ada assigned you "Fix login"',
-      };
+      const created = { id: 'notif-1', message: 'Ada assigned you "Fix login"' };
       prisma.notification.create.mockResolvedValue(created);
 
       await service.deliver(jobData());
@@ -201,7 +198,7 @@ describe('NotificationsService', () => {
     const query = (overrides: Partial<ListNotificationsQueryDto> = {}) =>
       Object.assign(new ListNotificationsQueryDto(), overrides);
 
-    it("only ever lists the requester's own notifications", async () => {
+    it('only ever lists the requester\'s own notifications', async () => {
       await service.list(me, query());
 
       expect(prisma.notification.findMany.mock.calls[0][0].where).toEqual({
@@ -251,10 +248,7 @@ describe('NotificationsService', () => {
     });
 
     it('stamps readAt on an unread notification', async () => {
-      prisma.notification.findFirst.mockResolvedValue({
-        id: 'n1',
-        readAt: null,
-      });
+      prisma.notification.findFirst.mockResolvedValue({ id: 'n1', readAt: null });
       prisma.notification.update.mockResolvedValue({ id: 'n1' });
 
       await service.markRead(me, 'n1');
@@ -275,7 +269,7 @@ describe('NotificationsService', () => {
       expect(prisma.notification.update).not.toHaveBeenCalled();
     });
 
-    it("marks only the requester's own unread notifications as read", async () => {
+    it('marks only the requester\'s own unread notifications as read', async () => {
       prisma.notification.updateMany.mockResolvedValue({ count: 3 });
 
       await expect(service.markAllRead(me)).resolves.toEqual({ updated: 3 });

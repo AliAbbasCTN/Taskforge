@@ -36,6 +36,7 @@ backend/
 │   ├── search/          # Phase 14
 │   ├── activity/        # Phase 15
 │   ├── audit/           # Phase 15
+│   ├── docs/            # Phase 16 — OpenAPI setup, response models, post-processing
 │   ├── common/          # guards, interceptors, filters, decorators, pipes (Phase 01+)
 │   ├── config/          # environment/config module (Phase 01)
 │   ├── database/        # Prisma service/module (Phase 02)

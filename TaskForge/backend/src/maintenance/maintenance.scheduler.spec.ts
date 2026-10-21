@@ -34,9 +34,7 @@ describe('MaintenanceScheduler', () => {
 
   it('does not crash the application if Redis is unavailable at startup', async () => {
     const scheduler = new MaintenanceScheduler({
-      upsertJobScheduler: jest
-        .fn()
-        .mockRejectedValue(new Error('ECONNREFUSED')),
+      upsertJobScheduler: jest.fn().mockRejectedValue(new Error('ECONNREFUSED')),
     } as unknown as Queue);
 
     await expect(scheduler.onApplicationBootstrap()).resolves.toBeUndefined();

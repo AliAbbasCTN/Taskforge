@@ -1,3 +1,9 @@
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiEndpoint, BEARER_AUTH_NAME } from '../common/swagger';
+import {
+  PaginatedTaskListResponse,
+  TaskResponse,
+} from '../docs/models';
 import {
   Body,
   Controller,
@@ -53,6 +59,8 @@ import { LogsActivity } from '../activity/activity.decorator';
  *   POST   /:taskId/move    - move to another column and/or position
  *   DELETE /:taskId         - delete
  */
+@ApiTags('Tasks')
+@ApiBearerAuth(BEARER_AUTH_NAME)
 @PublishesChanges('tasks')
 @Controller('organizations/:id/projects/:projectId/boards/:boardId/tasks')
 @UseGuards(JwtAuthGuard, OrganizationMembershipGuard, ProjectGuard, BoardGuard)
@@ -60,6 +68,11 @@ export class TasksController {
   constructor(private readonly tasksService: TasksService) {}
 
   @Get()
+  @ApiEndpoint({
+    summary: 'List tasks (paginated)',
+    description: 'A flat, filterable, sortable list for list-style screens. For the kanban view use the board endpoint; to search text use the search endpoint.',
+    ok: PaginatedTaskListResponse,
+  })
   list(
     @Param('boardId', ParseUUIDPipe) boardId: string,
     @Query() query: ListTasksQueryDto,
@@ -71,6 +84,13 @@ export class TasksController {
   @LogsActivity('task.created')
   @RequirePermission(Permission.ProjectTasksWrite)
   @UseGuards(ProjectPermissionGuard, ProjectActiveGuard)
+  @ApiEndpoint({
+    summary: 'Create a task',
+    description: 'Creates the task in `columnId`. If an assignee is set, they are notified.',
+    created: TaskResponse,
+    unprocessable: 'The column is not on this board, or the assignee is not a member of the project.',
+    conflict: 'The project is archived (read-only).',
+  })
   create(
     @Param('projectId', ParseUUIDPipe) projectId: string,
     @Param('boardId', ParseUUIDPipe) boardId: string,
@@ -81,6 +101,11 @@ export class TasksController {
   }
 
   @Get(':taskId')
+  @ApiEndpoint({
+    summary: 'Get a task',
+    ok: TaskResponse,
+    notFound: 'The task is not on this board.',
+  })
   findOne(
     @Param('boardId', ParseUUIDPipe) boardId: string,
     @Param('taskId', ParseUUIDPipe) taskId: string,
@@ -92,6 +117,14 @@ export class TasksController {
   @LogsActivity('task.updated')
   @RequirePermission(Permission.ProjectTasksWrite)
   @UseGuards(ProjectPermissionGuard, ProjectActiveGuard)
+  @ApiEndpoint({
+    summary: 'Edit a task',
+    description: 'Send any of `title`, `description`, `priority`, `dueDate`, `assigneeId`. `description`, `dueDate` and `assigneeId` can be cleared by sending `null`. To change the status, move the task instead.',
+    ok: TaskResponse,
+    notFound: 'The task is not on this board.',
+    unprocessable: 'The assignee is not a member of the project.',
+    conflict: 'The project is archived (read-only).',
+  })
   update(
     @Param('projectId', ParseUUIDPipe) projectId: string,
     @Param('boardId', ParseUUIDPipe) boardId: string,
@@ -106,18 +139,21 @@ export class TasksController {
   @LogsActivity('task.labels_changed')
   @RequirePermission(Permission.ProjectTasksWrite)
   @UseGuards(ProjectPermissionGuard, ProjectActiveGuard)
+  @ApiEndpoint({
+    summary: 'Replace a task\'s labels',
+    description: 'Send the COMPLETE list of label ids the task should have. Idempotent; an empty array removes all labels.',
+    ok: TaskResponse,
+    notFound: 'The task is not on this board.',
+    unprocessable: 'A label does not belong to this project.',
+    conflict: 'The project is archived (read-only).',
+  })
   setLabels(
     @Param('projectId', ParseUUIDPipe) projectId: string,
     @Param('boardId', ParseUUIDPipe) boardId: string,
     @Param('taskId', ParseUUIDPipe) taskId: string,
     @Body() dto: SetTaskLabelsDto,
   ) {
-    return this.tasksService.setLabels(
-      projectId,
-      boardId,
-      taskId,
-      dto.labelIds,
-    );
+    return this.tasksService.setLabels(projectId, boardId, taskId, dto.labelIds);
   }
 
   @Post(':taskId/move')
@@ -125,6 +161,14 @@ export class TasksController {
   @HttpCode(HttpStatus.OK)
   @RequirePermission(Permission.ProjectTasksWrite)
   @UseGuards(ProjectPermissionGuard, ProjectActiveGuard)
+  @ApiEndpoint({
+    summary: 'Move a task',
+    description: 'Moves the task to another column and/or position. Moving to a different column IS a status change.',
+    ok: TaskResponse,
+    notFound: 'The task is not on this board.',
+    unprocessable: 'The target column is not on this board.',
+    conflict: 'The project is archived (read-only).',
+  })
   move(
     @Param('boardId', ParseUUIDPipe) boardId: string,
     @Param('taskId', ParseUUIDPipe) taskId: string,
@@ -138,6 +182,12 @@ export class TasksController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermission(Permission.ProjectTasksWrite)
   @UseGuards(ProjectPermissionGuard, ProjectActiveGuard)
+  @ApiEndpoint({
+    summary: 'Delete a task',
+    noContent: 'Task deleted.',
+    notFound: 'The task is not on this board.',
+    conflict: 'The project is archived (read-only).',
+  })
   remove(
     @Param('boardId', ParseUUIDPipe) boardId: string,
     @Param('taskId', ParseUUIDPipe) taskId: string,

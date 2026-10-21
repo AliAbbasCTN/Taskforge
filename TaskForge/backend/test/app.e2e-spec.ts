@@ -1459,7 +1459,9 @@ describe('TaskForge backend (e2e)', () => {
         await post({ name: '     ' }).expect(400); // blank after trimming
         await post({}).expect(400); // missing
         await post({ name: 'x'.repeat(151) }).expect(400); // too long
-        await post({ name: 'Okay', description: 'x'.repeat(2001) }).expect(400);
+        await post({ name: 'Okay', description: 'x'.repeat(2001) }).expect(
+          400,
+        );
         // Unknown properties are rejected, not silently ignored - a client
         // cannot smuggle in e.g. `status` or `organizationId`.
         await post({ name: 'Okay', status: 'ARCHIVED' }).expect(400);
@@ -2482,11 +2484,7 @@ describe('TaskForge backend (e2e)', () => {
             .send({ name: 'Org B' })
             .expect(201)
         ).body.id as string;
-        const projectB = await createProject(
-          orgB,
-          admin.accessToken,
-          'Project B',
-        );
+        const projectB = await createProject(orgB, admin.accessToken, 'Project B');
         const boardB = await createBoard(orgB, projectB, admin.accessToken);
         await request(app.getHttpServer())
           .get(`${boardsUrl(orgId, projectId)}/${boardB.id}`)
@@ -2528,12 +2526,7 @@ describe('TaskForge backend (e2e)', () => {
           .send({ name: 'Backlog', position: 0 })
           .expect(201);
 
-        const view = await boardView(
-          orgId,
-          projectId,
-          boardId,
-          lead.accessToken,
-        );
+        const view = await boardView(orgId, projectId, boardId, lead.accessToken);
         expect(view.columns.map((c) => c.name)).toEqual([
           'Backlog',
           'To Do',
@@ -2553,12 +2546,7 @@ describe('TaskForge backend (e2e)', () => {
           .send({ name: 'Shipped', position: 0 })
           .expect(200);
 
-        const view = await boardView(
-          orgId,
-          projectId,
-          boardId,
-          lead.accessToken,
-        );
+        const view = await boardView(orgId, projectId, boardId, lead.accessToken);
         expect(view.columns.map((c) => c.name)).toEqual([
           'Shipped',
           'To Do',
@@ -2595,12 +2583,7 @@ describe('TaskForge backend (e2e)', () => {
           .set('Authorization', auth)
           .expect(204);
 
-        const view = await boardView(
-          orgId,
-          projectId,
-          boardId,
-          lead.accessToken,
-        );
+        const view = await boardView(orgId, projectId, boardId, lead.accessToken);
         expect(view.columns.map((c) => c.name)).toEqual(['To Do', 'Done']);
         expect(view.columns.map((c) => c.position)).toEqual([0, 1]);
       });
@@ -2675,12 +2658,7 @@ describe('TaskForge backend (e2e)', () => {
 
       it('rejects invalid input with 400 and a column from another board with 422', async () => {
         const { lead, orgId, projectId, boardId, todo } = await setup();
-        const other = await createBoard(
-          orgId,
-          projectId,
-          lead.accessToken,
-          'B2',
-        );
+        const other = await createBoard(orgId, projectId, lead.accessToken, 'B2');
         const post = (body: object) =>
           request(app.getHttpServer())
             .post(`${boardsUrl(orgId, projectId)}/${boardId}/tasks`)
@@ -2689,19 +2667,13 @@ describe('TaskForge backend (e2e)', () => {
 
         await post({ columnId: todo.id, title: '' }).expect(400);
         await post({ columnId: todo.id, title: 'x'.repeat(201) }).expect(400);
-        await post({ columnId: todo.id, title: 'T', priority: 'HUGE' }).expect(
+        await post({ columnId: todo.id, title: 'T', priority: 'HUGE' }).expect(400);
+        await post({ columnId: todo.id, title: 'T', dueDate: 'tomorrow' }).expect(
           400,
         );
-        await post({
-          columnId: todo.id,
-          title: 'T',
-          dueDate: 'tomorrow',
-        }).expect(400);
         await post({ title: 'No column' }).expect(400);
         // Status is the column - there is no status field to smuggle in.
-        await post({ columnId: todo.id, title: 'T', status: 'DONE' }).expect(
-          400,
-        );
+        await post({ columnId: todo.id, title: 'T', status: 'DONE' }).expect(400);
         await post({ columnId: 'not-a-uuid', title: 'T' }).expect(400);
 
         // Well-formed, but belongs to a different board.
@@ -2774,10 +2746,9 @@ describe('TaskForge backend (e2e)', () => {
         expect(edited.body.dueDate.startsWith('2026-12-31')).toBe(true);
         expect(edited.body.description).toBe('Details');
 
-        const cleared = await patch({
-          dueDate: null,
-          description: null,
-        }).expect(200);
+        const cleared = await patch({ dueDate: null, description: null }).expect(
+          200,
+        );
         expect(cleared.body.dueDate).toBeNull();
         expect(cleared.body.description).toBeNull();
 
@@ -2801,12 +2772,7 @@ describe('TaskForge backend (e2e)', () => {
           .send({ columnId: todo.id, position: 0 })
           .expect(200);
 
-        const view = await boardView(
-          orgId,
-          projectId,
-          boardId,
-          lead.accessToken,
-        );
+        const view = await boardView(orgId, projectId, boardId, lead.accessToken);
         expect(titles(view.columns[0])).toEqual(['C', 'A', 'B']);
         expect(view.columns[0].tasks.map((t) => t.position)).toEqual([0, 1, 2]);
       });
@@ -2829,12 +2795,7 @@ describe('TaskForge backend (e2e)', () => {
           .send({ columnId: doing.id, position: 0 })
           .expect(200);
 
-        const view = await boardView(
-          orgId,
-          projectId,
-          boardId,
-          lead.accessToken,
-        );
+        const view = await boardView(orgId, projectId, boardId, lead.accessToken);
         expect(titles(view.columns[0])).toEqual(['A', 'C']);
         expect(view.columns[0].tasks.map((t) => t.position)).toEqual([0, 1]);
         expect(titles(view.columns[1])).toEqual(['B', 'D']);
@@ -2843,12 +2804,7 @@ describe('TaskForge backend (e2e)', () => {
 
       it("refuses to move a task into another board's column (422)", async () => {
         const { lead, orgId, projectId, boardId, todo } = await setup();
-        const other = await createBoard(
-          orgId,
-          projectId,
-          lead.accessToken,
-          'B2',
-        );
+        const other = await createBoard(orgId, projectId, lead.accessToken, 'B2');
         const task = await createTask(
           orgId,
           projectId,
@@ -2858,19 +2814,12 @@ describe('TaskForge backend (e2e)', () => {
         );
 
         await request(app.getHttpServer())
-          .post(
-            `${boardsUrl(orgId, projectId)}/${boardId}/tasks/${task.id}/move`,
-          )
+          .post(`${boardsUrl(orgId, projectId)}/${boardId}/tasks/${task.id}/move`)
           .set('Authorization', authed(lead.accessToken))
           .send({ columnId: other.columns[0].id })
           .expect(422);
 
-        const view = await boardView(
-          orgId,
-          projectId,
-          boardId,
-          lead.accessToken,
-        );
+        const view = await boardView(orgId, projectId, boardId, lead.accessToken);
         expect(titles(view.columns[0])).toEqual(['Stay put']);
       });
 
@@ -2895,24 +2844,14 @@ describe('TaskForge backend (e2e)', () => {
           .set('Authorization', authed(lead.accessToken))
           .expect(404);
 
-        const view = await boardView(
-          orgId,
-          projectId,
-          boardId,
-          lead.accessToken,
-        );
+        const view = await boardView(orgId, projectId, boardId, lead.accessToken);
         expect(titles(view.columns[0])).toEqual(['B', 'C']);
         expect(view.columns[0].tasks.map((t) => t.position)).toEqual([0, 1]);
       });
 
       it('blocks IDOR: a task from another board is a 404 through this board', async () => {
         const { lead, orgId, projectId, boardId } = await setup();
-        const other = await createBoard(
-          orgId,
-          projectId,
-          lead.accessToken,
-          'B2',
-        );
+        const other = await createBoard(orgId, projectId, lead.accessToken, 'B2');
         const foreign = await createTask(
           orgId,
           projectId,
@@ -2953,8 +2892,7 @@ describe('TaskForge backend (e2e)', () => {
       });
 
       it('returns the board view with nested columns, tasks and safe assignees', async () => {
-        const { lead, member, orgId, projectId, boardId, doing } =
-          await setup();
+        const { lead, member, orgId, projectId, boardId, doing } = await setup();
         await createTask(orgId, projectId, boardId, lead.accessToken, {
           columnId: doing.id,
           title: 'Assigned',
@@ -3024,12 +2962,7 @@ describe('TaskForge backend (e2e)', () => {
           .expect(409);
 
         // Still readable...
-        const view = await boardView(
-          orgId,
-          projectId,
-          boardId,
-          lead.accessToken,
-        );
+        const view = await boardView(orgId, projectId, boardId, lead.accessToken);
         expect(titles(view.columns[0])).toEqual(['Existing']);
 
         // ...and writable again once unarchived.
@@ -3073,12 +3006,7 @@ describe('TaskForge backend (e2e)', () => {
           .set('Authorization', authed(lead.accessToken))
           .expect(204);
 
-        const view = await boardView(
-          orgId,
-          projectId,
-          boardId,
-          lead.accessToken,
-        );
+        const view = await boardView(orgId, projectId, boardId, lead.accessToken);
         expect(titles(view.columns[0])).toEqual(['Mine']); // task survives
         expect(view.columns[0].tasks[0].assignee).toBeNull();
       });
@@ -3097,12 +3025,7 @@ describe('TaskForge backend (e2e)', () => {
           .set('Authorization', authed(admin.accessToken))
           .expect(204);
 
-        const view = await boardView(
-          orgId,
-          projectId,
-          boardId,
-          lead.accessToken,
-        );
+        const view = await boardView(orgId, projectId, boardId, lead.accessToken);
         expect(view.columns[0].tasks[0].assignee).toBeNull();
       });
 
@@ -3175,13 +3098,7 @@ describe('TaskForge backend (e2e)', () => {
           const { lead, member, orgId, projectId } = await setup();
           const url = labelsUrl(orgId, projectId);
 
-          const bug = await createLabel(
-            orgId,
-            projectId,
-            lead.accessToken,
-            'Bug',
-            '#d92d20',
-          );
+          const bug = await createLabel(orgId, projectId, lead.accessToken, 'Bug', '#d92d20');
           expect(bug.color).toBe('#d92d20');
 
           const renamed = await request(app.getHttpServer())
@@ -3194,9 +3111,7 @@ describe('TaskForge backend (e2e)', () => {
 
           // A plain project member can see the vocabulary...
           const list = await get(url, member.accessToken).expect(200);
-          expect(list.body.map((l: { name: string }) => l.name)).toEqual([
-            'Defect',
-          ]);
+          expect(list.body.map((l: { name: string }) => l.name)).toEqual(['Defect']);
           // ...but not change it.
           await request(app.getHttpServer())
             .post(url)
@@ -3212,9 +3127,7 @@ describe('TaskForge backend (e2e)', () => {
             .delete(`${url}/${bug.id}`)
             .set('Authorization', authed(lead.accessToken))
             .expect(204);
-          expect((await get(url, lead.accessToken).expect(200)).body).toEqual(
-            [],
-          );
+          expect((await get(url, lead.accessToken).expect(200)).body).toEqual([]);
         });
 
         it('validates names and colours, and rejects duplicate names with 409', async () => {
@@ -3230,25 +3143,13 @@ describe('TaskForge backend (e2e)', () => {
           await post({ name: 'x'.repeat(51), color: '#000000' }).expect(400);
           await post({ name: 'Bad', color: 'red' }).expect(400);
           await post({ name: 'Bad', color: '#12345' }).expect(400);
-          await post({ name: 'Bad', color: 'url(javascript:alert(1))' }).expect(
-            400,
-          );
+          await post({ name: 'Bad', color: 'url(javascript:alert(1))' }).expect(400);
           await post({ name: 'Bad', color: '#000000', extra: 1 }).expect(400);
 
-          const first = await createLabel(
-            orgId,
-            projectId,
-            lead.accessToken,
-            'Design',
-          );
+          const first = await createLabel(orgId, projectId, lead.accessToken, 'Design');
           await post({ name: 'Design', color: '#000000' }).expect(409);
 
-          const other = await createLabel(
-            orgId,
-            projectId,
-            lead.accessToken,
-            'Ops',
-          );
+          const other = await createLabel(orgId, projectId, lead.accessToken, 'Ops');
           await request(app.getHttpServer())
             .patch(`${url}/${other.id}`)
             .set('Authorization', authed(lead.accessToken))
@@ -3265,22 +3166,11 @@ describe('TaskForge backend (e2e)', () => {
           const { admin, lead, orgId, projectId } = await setup();
           const stranger = await registerAndLogin('stranger@example.com');
           await addOrgMember(orgId, admin.accessToken, 'stranger@example.com');
-          await get(labelsUrl(orgId, projectId), stranger.accessToken).expect(
-            404,
-          );
+          await get(labelsUrl(orgId, projectId), stranger.accessToken).expect(404);
 
           // A label belongs to ONE project: another project's URL can't touch it.
-          const otherProject = await createProject(
-            orgId,
-            admin.accessToken,
-            'Other',
-          );
-          const label = await createLabel(
-            orgId,
-            projectId,
-            lead.accessToken,
-            'Mine',
-          );
+          const otherProject = await createProject(orgId, admin.accessToken, 'Other');
+          const label = await createLabel(orgId, projectId, lead.accessToken, 'Mine');
           await request(app.getHttpServer())
             .patch(`${labelsUrl(orgId, otherProject)}/${label.id}`)
             .set('Authorization', authed(admin.accessToken))
@@ -3291,12 +3181,7 @@ describe('TaskForge backend (e2e)', () => {
             .set('Authorization', authed(admin.accessToken))
             .expect(404);
           expect(
-            (
-              await get(
-                labelsUrl(orgId, otherProject),
-                admin.accessToken,
-              ).expect(200)
-            ).body,
+            (await get(labelsUrl(orgId, otherProject), admin.accessToken).expect(200)).body,
           ).toEqual([]);
         });
 
@@ -3317,58 +3202,26 @@ describe('TaskForge backend (e2e)', () => {
       });
 
       describe('labels on tasks', () => {
-        it("lets a project MEMBER set a task's labels, and shows them everywhere a task appears", async () => {
-          const { lead, member, orgId, projectId, boardId, todo } =
-            await setup();
-          const bug = await createLabel(
-            orgId,
-            projectId,
-            lead.accessToken,
-            'Bug',
-            '#d92d20',
-          );
-          const ui = await createLabel(
-            orgId,
-            projectId,
-            lead.accessToken,
-            'UI',
-            '#2f4bdb',
-          );
-          const task = await createTask(
-            orgId,
-            projectId,
-            boardId,
-            lead.accessToken,
-            {
-              columnId: todo.id,
-              title: 'Fix it',
-            },
-          );
+        it('lets a project MEMBER set a task\'s labels, and shows them everywhere a task appears', async () => {
+          const { lead, member, orgId, projectId, boardId, todo } = await setup();
+          const bug = await createLabel(orgId, projectId, lead.accessToken, 'Bug', '#d92d20');
+          const ui = await createLabel(orgId, projectId, lead.accessToken, 'UI', '#2f4bdb');
+          const task = await createTask(orgId, projectId, boardId, lead.accessToken, {
+            columnId: todo.id,
+            title: 'Fix it',
+          });
 
-          const res = await setLabels(
-            orgId,
-            projectId,
-            boardId,
-            task.id,
-            member.accessToken,
-            [ui.id, bug.id],
-          ).expect(200);
+          const res = await setLabels(orgId, projectId, boardId, task.id, member.accessToken, [
+            ui.id,
+            bug.id,
+          ]).expect(200);
           // Flattened to plain labels (not join-table rows), ordered by name.
           expect(res.body.labels).toEqual([
-            expect.objectContaining({
-              id: bug.id,
-              name: 'Bug',
-              color: '#d92d20',
-            }),
+            expect.objectContaining({ id: bug.id, name: 'Bug', color: '#d92d20' }),
             expect.objectContaining({ id: ui.id, name: 'UI' }),
           ]);
 
-          const view = await boardView(
-            orgId,
-            projectId,
-            boardId,
-            lead.accessToken,
-          );
+          const view = await boardView(orgId, projectId, boardId, lead.accessToken);
           expect(view.columns[0].tasks[0]).toEqual(
             expect.objectContaining({
               labels: [
@@ -3383,117 +3236,48 @@ describe('TaskForge backend (e2e)', () => {
           const { lead, orgId, projectId, boardId, todo } = await setup();
           const a = await createLabel(orgId, projectId, lead.accessToken, 'A');
           const b = await createLabel(orgId, projectId, lead.accessToken, 'B');
-          const task = await createTask(
-            orgId,
-            projectId,
-            boardId,
-            lead.accessToken,
-            {
-              columnId: todo.id,
-              title: 'T1',
-            },
-          );
+          const task = await createTask(orgId, projectId, boardId, lead.accessToken, {
+            columnId: todo.id,
+            title: 'T1',
+          });
 
-          await setLabels(
-            orgId,
-            projectId,
-            boardId,
-            task.id,
-            lead.accessToken,
-            [a.id, b.id],
-          ).expect(200);
-          const replaced = await setLabels(
-            orgId,
-            projectId,
-            boardId,
-            task.id,
-            lead.accessToken,
-            [b.id, b.id],
-          ).expect(200);
-          expect(
-            replaced.body.labels.map((l: { name: string }) => l.name),
-          ).toEqual(['B']);
+          await setLabels(orgId, projectId, boardId, task.id, lead.accessToken, [a.id, b.id]).expect(200);
+          const replaced = await setLabels(orgId, projectId, boardId, task.id, lead.accessToken, [b.id, b.id]).expect(200);
+          expect(replaced.body.labels.map((l: { name: string }) => l.name)).toEqual(['B']);
 
-          const cleared = await setLabels(
-            orgId,
-            projectId,
-            boardId,
-            task.id,
-            lead.accessToken,
-            [],
-          ).expect(200);
+          const cleared = await setLabels(orgId, projectId, boardId, task.id, lead.accessToken, []).expect(200);
           expect(cleared.body.labels).toEqual([]);
         });
 
         it('rejects a label from ANOTHER project (422) without changing the task', async () => {
-          const { admin, lead, orgId, projectId, boardId, todo } =
-            await setup();
-          const mine = await createLabel(
-            orgId,
-            projectId,
-            lead.accessToken,
-            'Mine',
-          );
-          const otherProject = await createProject(
-            orgId,
-            admin.accessToken,
-            'Other',
-          );
-          const foreign = await createLabel(
-            orgId,
-            otherProject,
-            admin.accessToken,
-            'Foreign',
-          );
-          const task = await createTask(
-            orgId,
-            projectId,
-            boardId,
-            lead.accessToken,
-            {
-              columnId: todo.id,
-              title: 'T1',
-            },
-          );
-          await setLabels(
-            orgId,
-            projectId,
-            boardId,
-            task.id,
-            lead.accessToken,
-            [mine.id],
-          ).expect(200);
+          const { admin, lead, orgId, projectId, boardId, todo } = await setup();
+          const mine = await createLabel(orgId, projectId, lead.accessToken, 'Mine');
+          const otherProject = await createProject(orgId, admin.accessToken, 'Other');
+          const foreign = await createLabel(orgId, otherProject, admin.accessToken, 'Foreign');
+          const task = await createTask(orgId, projectId, boardId, lead.accessToken, {
+            columnId: todo.id,
+            title: 'T1',
+          });
+          await setLabels(orgId, projectId, boardId, task.id, lead.accessToken, [mine.id]).expect(200);
 
-          await setLabels(
-            orgId,
-            projectId,
-            boardId,
-            task.id,
-            lead.accessToken,
-            [mine.id, foreign.id],
-          ).expect(422);
+          await setLabels(orgId, projectId, boardId, task.id, lead.accessToken, [
+            mine.id,
+            foreign.id,
+          ]).expect(422);
 
           const after = await get(
             `${tasksUrl(orgId, projectId, boardId)}/${task.id}`,
             lead.accessToken,
           ).expect(200);
-          expect(
-            after.body.labels.map((l: { name: string }) => l.name),
-          ).toEqual(['Mine']);
+          expect(after.body.labels.map((l: { name: string }) => l.name)).toEqual(['Mine']);
         });
 
         it('validates the request body', async () => {
           const { lead, orgId, projectId, boardId, todo } = await setup();
-          const task = await createTask(
-            orgId,
-            projectId,
-            boardId,
-            lead.accessToken,
-            {
-              columnId: todo.id,
-              title: 'T1',
-            },
-          );
+          const task = await createTask(orgId, projectId, boardId, lead.accessToken, {
+            columnId: todo.id,
+            title: 'T1',
+          });
           const put = (body: object) =>
             request(app.getHttpServer())
               .put(`${tasksUrl(orgId, projectId, boardId)}/${task.id}/labels`)
@@ -3503,40 +3287,17 @@ describe('TaskForge backend (e2e)', () => {
           await put({}).expect(400);
           await put({ labelIds: 'nope' }).expect(400);
           await put({ labelIds: ['not-a-uuid'] }).expect(400);
-          await put({
-            labelIds: Array.from(
-              { length: 21 },
-              () => '11111111-1111-4111-8111-111111111111',
-            ),
-          }).expect(400);
+          await put({ labelIds: Array.from({ length: 21 }, () => '11111111-1111-4111-8111-111111111111') }).expect(400);
         });
 
         it('detaches a deleted label from its tasks without deleting the tasks', async () => {
           const { lead, orgId, projectId, boardId, todo } = await setup();
-          const label = await createLabel(
-            orgId,
-            projectId,
-            lead.accessToken,
-            'Temp',
-          );
-          const task = await createTask(
-            orgId,
-            projectId,
-            boardId,
-            lead.accessToken,
-            {
-              columnId: todo.id,
-              title: 'Survivor',
-            },
-          );
-          await setLabels(
-            orgId,
-            projectId,
-            boardId,
-            task.id,
-            lead.accessToken,
-            [label.id],
-          ).expect(200);
+          const label = await createLabel(orgId, projectId, lead.accessToken, 'Temp');
+          const task = await createTask(orgId, projectId, boardId, lead.accessToken, {
+            columnId: todo.id,
+            title: 'Survivor',
+          });
+          await setLabels(orgId, projectId, boardId, task.id, lead.accessToken, [label.id]).expect(200);
 
           await request(app.getHttpServer())
             .delete(`${labelsUrl(orgId, projectId)}/${label.id}`)
@@ -3556,16 +3317,10 @@ describe('TaskForge backend (e2e)', () => {
       describe('comments', () => {
         async function taskWithMember() {
           const ctx = await setup();
-          const task = await createTask(
-            ctx.orgId,
-            ctx.projectId,
-            ctx.boardId,
-            ctx.lead.accessToken,
-            {
-              columnId: ctx.todo.id,
-              title: 'Discuss me',
-            },
-          );
+          const task = await createTask(ctx.orgId, ctx.projectId, ctx.boardId, ctx.lead.accessToken, {
+            columnId: ctx.todo.id,
+            title: 'Discuss me',
+          });
           const url = `${tasksUrl(ctx.orgId, ctx.projectId, ctx.boardId)}/${task.id}/comments`;
           return { ...ctx, task, url };
         }
@@ -3578,32 +3333,21 @@ describe('TaskForge backend (e2e)', () => {
         it('lets members comment; comments list oldest first with safe author details', async () => {
           const { lead, member, url } = await taskWithMember();
 
-          const first = await postComment(
-            url,
-            lead.accessToken,
-            'First',
-          ).expect(201);
+          const first = await postComment(url, lead.accessToken, 'First').expect(201);
           await postComment(url, member.accessToken, '  Second  ').expect(201);
 
           expect(first.body.author.email).toBe('lead@example.com');
           expect(first.body.editedAt).toBeNull();
 
           const list = await get(url, member.accessToken).expect(200);
-          expect(list.body.map((c: { body: string }) => c.body)).toEqual([
-            'First',
-            'Second',
-          ]);
+          expect(list.body.map((c: { body: string }) => c.body)).toEqual(['First', 'Second']);
           expect(JSON.stringify(list.body)).not.toContain('passwordHash');
         });
 
         it('stores comment text verbatim (it is rendered as text, never as HTML)', async () => {
           const { lead, url } = await taskWithMember();
 
-          const res = await postComment(
-            url,
-            lead.accessToken,
-            '<script>alert(1)</script>',
-          ).expect(201);
+          const res = await postComment(url, lead.accessToken, '<script>alert(1)</script>').expect(201);
 
           expect(res.body.body).toBe('<script>alert(1)</script>');
         });
@@ -3613,27 +3357,18 @@ describe('TaskForge backend (e2e)', () => {
 
           await postComment(url, lead.accessToken, '').expect(400);
           await postComment(url, lead.accessToken, '   ').expect(400);
-          await postComment(url, lead.accessToken, 'x'.repeat(5001)).expect(
-            400,
-          );
+          await postComment(url, lead.accessToken, 'x'.repeat(5001)).expect(400);
           await request(app.getHttpServer())
             .post(url)
             .set('Authorization', authed(lead.accessToken))
             .send({ body: 'ok', authorId: 'someone-else' })
             .expect(400);
-          await request(app.getHttpServer())
-            .post(url)
-            .send({ body: 'hi' })
-            .expect(401);
+          await request(app.getHttpServer()).post(url).send({ body: 'hi' }).expect(401);
         });
 
         it('lets only the AUTHOR edit a comment, and marks it edited', async () => {
           const { lead, member, url } = await taskWithMember();
-          const comment = await postComment(
-            url,
-            member.accessToken,
-            'Original',
-          ).expect(201);
+          const comment = await postComment(url, member.accessToken, 'Original').expect(201);
           const commentUrl = `${url}/${comment.body.id}`;
 
           // Not even a project LEAD may put words in someone else's mouth.
@@ -3652,7 +3387,7 @@ describe('TaskForge backend (e2e)', () => {
           expect(edited.body.editedAt).toEqual(expect.any(String));
         });
 
-        it("lets the author delete, a moderator delete anyone's, and nobody else delete", async () => {
+        it('lets the author delete, a moderator delete anyone\'s, and nobody else delete', async () => {
           const { admin, lead, member, orgId, url } = await taskWithMember();
           const outsider = await registerAndLogin('colleague@example.com');
           await addOrgMember(orgId, admin.accessToken, 'colleague@example.com');
@@ -3663,19 +3398,9 @@ describe('TaskForge backend (e2e)', () => {
             .send({ email: 'colleague@example.com' })
             .expect(201);
 
-          const own = await postComment(url, member.accessToken, 'Mine').expect(
-            201,
-          );
-          const other = await postComment(
-            url,
-            member.accessToken,
-            'Also mine',
-          ).expect(201);
-          const third = await postComment(
-            url,
-            member.accessToken,
-            'Third',
-          ).expect(201);
+          const own = await postComment(url, member.accessToken, 'Mine').expect(201);
+          const other = await postComment(url, member.accessToken, 'Also mine').expect(201);
+          const third = await postComment(url, member.accessToken, 'Third').expect(201);
 
           // A different plain member: 403.
           await request(app.getHttpServer())
@@ -3698,14 +3423,11 @@ describe('TaskForge backend (e2e)', () => {
             .set('Authorization', authed(admin.accessToken))
             .expect(204);
 
-          expect((await get(url, lead.accessToken).expect(200)).body).toEqual(
-            [],
-          );
+          expect((await get(url, lead.accessToken).expect(200)).body).toEqual([]);
         });
 
         it('hides comments from non-members (404) and from the wrong board (404)', async () => {
-          const { admin, lead, orgId, projectId, task, url } =
-            await taskWithMember();
+          const { admin, lead, orgId, projectId, task, url } = await taskWithMember();
           const stranger = await registerAndLogin('stranger@example.com');
           await addOrgMember(orgId, admin.accessToken, 'stranger@example.com');
           await postComment(url, lead.accessToken, 'Secret plans').expect(201);
@@ -3713,20 +3435,14 @@ describe('TaskForge backend (e2e)', () => {
           await get(url, stranger.accessToken).expect(404);
 
           // The same task ID through ANOTHER board's URL is not reachable.
-          const other = await createBoard(
-            orgId,
-            projectId,
-            lead.accessToken,
-            'B2',
-          );
+          const other = await createBoard(orgId, projectId, lead.accessToken, 'B2');
           const wrongUrl = `${tasksUrl(orgId, projectId, other.id)}/${task.id}/comments`;
           await get(wrongUrl, lead.accessToken).expect(404);
           await postComment(wrongUrl, lead.accessToken, 'Sneaky').expect(404);
         });
 
         it('is read-only while the project is archived, and cascades with the task', async () => {
-          const { lead, orgId, projectId, boardId, task, url } =
-            await taskWithMember();
+          const { lead, orgId, projectId, boardId, task, url } = await taskWithMember();
           await postComment(url, lead.accessToken, 'Before').expect(201);
           await request(app.getHttpServer())
             .post(`${projectsUrl(orgId)}/${projectId}/archive`)
@@ -3760,21 +3476,11 @@ describe('TaskForge backend (e2e)', () => {
         async function seed() {
           const ctx = await setup();
           const { orgId, projectId, boardId, todo, doing, lead, member } = ctx;
-          const bug = await createLabel(
-            orgId,
-            projectId,
-            lead.accessToken,
-            'Bug',
-          );
+          const bug = await createLabel(orgId, projectId, lead.accessToken, 'Bug');
           const make = (body: object) =>
             createTask(orgId, projectId, boardId, lead.accessToken, body);
 
-          await make({
-            columnId: todo.id,
-            title: 'Alpha',
-            priority: 'LOW',
-            dueDate: '2020-01-01',
-          });
+          await make({ columnId: todo.id, title: 'Alpha', priority: 'LOW', dueDate: '2020-01-01' });
           const bravo = await make({
             columnId: todo.id,
             title: 'Bravo',
@@ -3782,11 +3488,7 @@ describe('TaskForge backend (e2e)', () => {
             dueDate: '2099-01-01',
             assigneeId: member.userId,
           });
-          await make({
-            columnId: doing.id,
-            title: 'Charlie',
-            priority: 'URGENT',
-          });
+          await make({ columnId: doing.id, title: 'Charlie', priority: 'URGENT' });
           await make({
             columnId: doing.id,
             title: 'Delta',
@@ -3794,15 +3496,9 @@ describe('TaskForge backend (e2e)', () => {
             dueDate: '2020-06-01',
             assigneeId: lead.userId,
           });
-          const echo = await make({
-            columnId: todo.id,
-            title: 'Echo',
-            priority: 'HIGH',
-          });
+          const echo = await make({ columnId: todo.id, title: 'Echo', priority: 'HIGH' });
           for (const t of [bravo, echo]) {
-            await setLabels(orgId, projectId, boardId, t.id, lead.accessToken, [
-              bug.id,
-            ]).expect(200);
+            await setLabels(orgId, projectId, boardId, t.id, lead.accessToken, [bug.id]).expect(200);
           }
           return { ...ctx, bug, url: tasksUrl(orgId, projectId, boardId) };
         }
@@ -3823,21 +3519,12 @@ describe('TaskForge backend (e2e)', () => {
           const res = await get(url, lead.accessToken).expect(200);
 
           expect(res.body).toEqual(
-            expect.objectContaining({
-              total: 5,
-              page: 1,
-              pageSize: 20,
-              totalPages: 1,
-            }),
+            expect.objectContaining({ total: 5, page: 1, pageSize: 20, totalPages: 1 }),
           );
           expect(res.body.items).toHaveLength(5);
-          const bravo = res.body.items.find(
-            (t: ListedTask) => t.title === 'Bravo',
-          );
+          const bravo = res.body.items.find((t: ListedTask) => t.title === 'Bravo');
           expect(bravo.column.name).toBe('To Do');
-          expect(bravo.labels).toEqual([
-            expect.objectContaining({ name: 'Bug' }),
-          ]);
+          expect(bravo.labels).toEqual([expect.objectContaining({ name: 'Bug' })]);
         });
 
         it('filters by priority, assignee, label and column, and combines filters with AND', async () => {
@@ -3845,31 +3532,12 @@ describe('TaskForge backend (e2e)', () => {
           const list = async (query: string) =>
             (await get(`${url}?${query}`, lead.accessToken).expect(200)).body;
 
-          expect(titlesOf(await list('priority=HIGH'))).toEqual([
-            'Bravo',
-            'Echo',
-          ]);
-          expect(titlesOf(await list(`assigneeId=${member.userId}`))).toEqual([
-            'Bravo',
-          ]);
-          expect(titlesOf(await list(`labelId=${bug.id}`))).toEqual([
-            'Bravo',
-            'Echo',
-          ]);
-          expect(titlesOf(await list(`columnId=${doing.id}`))).toEqual([
-            'Charlie',
-            'Delta',
-          ]);
-          expect(
-            titlesOf(
-              await list(
-                `priority=HIGH&labelId=${bug.id}&assigneeId=${member.userId}`,
-              ),
-            ),
-          ).toEqual(['Bravo']);
-          expect(
-            titlesOf(await list('priority=LOW&labelId=' + bug.id)),
-          ).toEqual([]);
+          expect(titlesOf(await list('priority=HIGH'))).toEqual(['Bravo', 'Echo']);
+          expect(titlesOf(await list(`assigneeId=${member.userId}`))).toEqual(['Bravo']);
+          expect(titlesOf(await list(`labelId=${bug.id}`))).toEqual(['Bravo', 'Echo']);
+          expect(titlesOf(await list(`columnId=${doing.id}`))).toEqual(['Charlie', 'Delta']);
+          expect(titlesOf(await list(`priority=HIGH&labelId=${bug.id}&assigneeId=${member.userId}`))).toEqual(['Bravo']);
+          expect(titlesOf(await list('priority=LOW&labelId=' + bug.id))).toEqual([]);
         });
 
         it('treats overdue=true as past-due only and overdue=false as NO filter (not "true")', async () => {
@@ -3877,10 +3545,7 @@ describe('TaskForge backend (e2e)', () => {
           const list = async (query: string) =>
             (await get(`${url}?${query}`, lead.accessToken).expect(200)).body;
 
-          expect(titlesOf(await list('overdue=true'))).toEqual([
-            'Alpha',
-            'Delta',
-          ]);
+          expect(titlesOf(await list('overdue=true'))).toEqual(['Alpha', 'Delta']);
           // The classic bug: Boolean("false") === true. This must NOT filter.
           expect(titlesOf(await list('overdue=false'))).toHaveLength(5);
         });
@@ -3891,68 +3556,42 @@ describe('TaskForge backend (e2e)', () => {
             (await get(`${url}?${query}`, lead.accessToken).expect(200)).body
               .items as ListedTask[];
 
-          expect(
-            (await list('sortBy=title&sortOrder=asc')).map((t) => t.title),
-          ).toEqual(['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo']);
-          expect(
-            (await list('sortBy=title&sortOrder=desc')).map((t) => t.title),
-          ).toEqual(['Echo', 'Delta', 'Charlie', 'Bravo', 'Alpha']);
+          expect((await list('sortBy=title&sortOrder=asc')).map((t) => t.title)).toEqual([
+            'Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo',
+          ]);
+          expect((await list('sortBy=title&sortOrder=desc')).map((t) => t.title)).toEqual([
+            'Echo', 'Delta', 'Charlie', 'Bravo', 'Alpha',
+          ]);
 
-          expect(
-            (await list('sortBy=priority&sortOrder=desc')).map(
-              (t) => t.priority,
-            ),
-          ).toEqual(['URGENT', 'HIGH', 'HIGH', 'MEDIUM', 'LOW']);
-          expect(
-            (await list('sortBy=priority&sortOrder=asc')).map(
-              (t) => t.priority,
-            ),
-          ).toEqual(['LOW', 'MEDIUM', 'HIGH', 'HIGH', 'URGENT']);
+          expect((await list('sortBy=priority&sortOrder=desc')).map((t) => t.priority)).toEqual([
+            'URGENT', 'HIGH', 'HIGH', 'MEDIUM', 'LOW',
+          ]);
+          expect((await list('sortBy=priority&sortOrder=asc')).map((t) => t.priority)).toEqual([
+            'LOW', 'MEDIUM', 'HIGH', 'HIGH', 'URGENT',
+          ]);
 
           for (const order of ['asc', 'desc']) {
             const byDue = await list(`sortBy=dueDate&sortOrder=${order}`);
             // Both undated tasks are last in EITHER direction.
             expect(byDue.slice(3).every((t) => t.dueDate === null)).toBe(true);
-            expect(byDue.slice(0, 3).every((t) => t.dueDate !== null)).toBe(
-              true,
-            );
+            expect(byDue.slice(0, 3).every((t) => t.dueDate !== null)).toBe(true);
           }
           expect(
-            (await list('sortBy=dueDate&sortOrder=asc'))
-              .slice(0, 3)
-              .map((t) => t.title),
+            (await list('sortBy=dueDate&sortOrder=asc')).slice(0, 3).map((t) => t.title),
           ).toEqual(['Alpha', 'Delta', 'Bravo']);
         });
 
         it('pages through results without gaps or repeats, and past the end returns nothing', async () => {
           const { lead, url } = await seed();
           const page = async (n: number) =>
-            (
-              await get(
-                `${url}?sortBy=title&sortOrder=asc&pageSize=2&page=${n}`,
-                lead.accessToken,
-              ).expect(200)
-            ).body;
+            (await get(`${url}?sortBy=title&sortOrder=asc&pageSize=2&page=${n}`, lead.accessToken).expect(200)).body;
 
-          const [p1, p2, p3, p4] = [
-            await page(1),
-            await page(2),
-            await page(3),
-            await page(4),
-          ];
+          const [p1, p2, p3, p4] = [await page(1), await page(2), await page(3), await page(4)];
 
-          expect(p1.items.map((t: ListedTask) => t.title)).toEqual([
-            'Alpha',
-            'Bravo',
-          ]);
-          expect(p2.items.map((t: ListedTask) => t.title)).toEqual([
-            'Charlie',
-            'Delta',
-          ]);
+          expect(p1.items.map((t: ListedTask) => t.title)).toEqual(['Alpha', 'Bravo']);
+          expect(p2.items.map((t: ListedTask) => t.title)).toEqual(['Charlie', 'Delta']);
           expect(p3.items.map((t: ListedTask) => t.title)).toEqual(['Echo']);
-          expect(p1).toEqual(
-            expect.objectContaining({ total: 5, totalPages: 3, pageSize: 2 }),
-          );
+          expect(p1).toEqual(expect.objectContaining({ total: 5, totalPages: 3, pageSize: 2 }));
           expect(p4.items).toEqual([]);
           expect(p4.total).toBe(5);
         });
@@ -3977,12 +3616,7 @@ describe('TaskForge backend (e2e)', () => {
 
         it('never lists tasks from another board, and is hidden from non-members', async () => {
           const { admin, lead, orgId, projectId, url } = await seed();
-          const other = await createBoard(
-            orgId,
-            projectId,
-            lead.accessToken,
-            'B2',
-          );
+          const other = await createBoard(orgId, projectId, lead.accessToken, 'B2');
           await createTask(orgId, projectId, other.id, lead.accessToken, {
             columnId: other.columns[0].id,
             title: 'On another board',
@@ -4001,17 +3635,11 @@ describe('TaskForge backend (e2e)', () => {
           const { lead, orgId, projectId, boardId } = await seed();
           const boardUrl = `${boardsUrl(orgId, projectId)}/${boardId}`;
 
-          const high = (
-            await get(`${boardUrl}?priority=HIGH`, lead.accessToken).expect(200)
-          ).body as BoardView;
+          const high = (await get(`${boardUrl}?priority=HIGH`, lead.accessToken).expect(200)).body as BoardView;
           expect(high.columns).toHaveLength(3);
-          expect(
-            high.columns.flatMap((c) => c.tasks.map((t) => t.title)).sort(),
-          ).toEqual(['Bravo', 'Echo']);
+          expect(high.columns.flatMap((c) => c.tasks.map((t) => t.title)).sort()).toEqual(['Bravo', 'Echo']);
 
-          const all = (
-            await get(`${boardUrl}?overdue=false`, lead.accessToken).expect(200)
-          ).body as BoardView;
+          const all = (await get(`${boardUrl}?overdue=false`, lead.accessToken).expect(200)).body as BoardView;
           expect(all.columns.flatMap((c) => c.tasks)).toHaveLength(5);
 
           await get(`${boardUrl}?priority=SOON`, lead.accessToken).expect(400);

@@ -1,3 +1,4 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
   IsInt,
@@ -18,10 +19,16 @@ export class CreateColumnDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(100)
+  @ApiProperty({ example: 'In Review', maxLength: 100 })
   name!: string;
 
   @IsOptional()
   @IsInt()
   @Min(0)
+  @ApiPropertyOptional({
+    minimum: 0,
+    example: 2,
+    description: 'Zero-based index. Omit to add the column at the end.',
+  })
   position?: number;
 }

@@ -80,8 +80,7 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
     if (typeof token !== 'string' || token.length === 0) {
       throw new Error('Missing token');
     }
-    const payload =
-      await this.jwtService.verifyAsync<AccessTokenPayload>(token);
+    const payload = await this.jwtService.verifyAsync<AccessTokenPayload>(token);
     socket.data.userId = payload.sub;
     socket.data.tokenExpiresAt = payload.exp * 1000;
   }
@@ -130,9 +129,7 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
       return { ok: false, error: 'Project not found' };
     }
 
-    const alreadyIn = [...client.rooms].filter((room) =>
-      projectIdFromRoom(room),
-    );
+    const alreadyIn = [...client.rooms].filter((room) => projectIdFromRoom(room));
     if (
       !client.rooms.has(projectRoom(projectId)) &&
       alreadyIn.length >= MAX_PROJECT_ROOMS_PER_SOCKET

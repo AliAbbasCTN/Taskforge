@@ -44,10 +44,7 @@ export interface S3StorageOptions {
  * checks the user's permission on every download. See docs/phase-13-concepts.md
  * for the trade-off versus pre-signed URLs.
  */
-export class S3StorageService
-  extends StorageService
-  implements OnModuleDestroy
-{
+export class S3StorageService extends StorageService implements OnModuleDestroy {
   private readonly client: S3Client;
   private readonly bucket: string;
 

@@ -8,8 +8,7 @@ import {
 
 const DERIVED: DerivedActivityAction[] = ['task.assigned', 'task.unassigned'];
 const LOGGED = ACTIVITY_ACTIONS.filter(
-  (action): action is LoggedActivityAction =>
-    !DERIVED.includes(action as DerivedActivityAction),
+  (action): action is LoggedActivityAction => !DERIVED.includes(action as DerivedActivityAction),
 );
 
 const ORG = '11111111-1111-4111-8111-111111111111';
@@ -19,13 +18,7 @@ const TASK = '44444444-4444-4444-8444-444444444444';
 const USER = '55555555-5555-4555-8555-555555555555';
 
 const ctx = (overrides: Partial<DescribeContext> = {}): DescribeContext => ({
-  params: {
-    id: ORG,
-    projectId: PROJECT,
-    boardId: BOARD,
-    taskId: TASK,
-    userId: USER,
-  },
+  params: { id: ORG, projectId: PROJECT, boardId: BOARD, taskId: TASK, userId: USER },
   body: {},
   response: {},
   before: null,
@@ -38,11 +31,7 @@ const describe_ = (action: LoggedActivityAction, c: DescribeContext) =>
 describe('ACTIVITY_SPECS', () => {
   it('has exactly one spec for every action a route can log (derived actions have none)', () => {
     expect(Object.keys(ACTIVITY_SPECS).sort()).toEqual([...LOGGED].sort());
-    expect(
-      DERIVED.every((action) =>
-        (ACTIVITY_ACTIONS as readonly string[]).includes(action),
-      ),
-    ).toBe(true);
+    expect(DERIVED.every((action) => (ACTIVITY_ACTIONS as readonly string[]).includes(action))).toBe(true);
   });
 
   it.each([...LOGGED])(
@@ -62,12 +51,7 @@ describe('ACTIVITY_SPECS', () => {
       const [draft] = describe_(
         'task.created',
         ctx({
-          response: {
-            id: TASK,
-            title: 'Fix login',
-            priority: 'HIGH',
-            assignee: { name: 'Max' },
-          },
+          response: { id: TASK, title: 'Fix login', priority: 'HIGH', assignee: { name: 'Max' } },
         }),
       );
       expect(draft).toMatchObject({
@@ -86,7 +70,7 @@ describe('ACTIVITY_SPECS', () => {
       expect(describe_('task.created', ctx())).toEqual([]);
     });
 
-    it("task.updated lists changed fields (excluding assignment) and keeps a renamed task's old title", () => {
+    it('task.updated lists changed fields (excluding assignment) and keeps a renamed task\'s old title', () => {
       const drafts = describe_(
         'task.updated',
         ctx({
@@ -112,17 +96,11 @@ describe('ACTIVITY_SPECS', () => {
           before: { title: 'T', assigneeId: null },
         }),
       );
-      expect(drafts.map((d) => d.action)).toEqual([
-        'task.updated',
-        'task.assigned',
-      ]);
-      expect(drafts[1].metadata).toEqual({
-        assigneeId: USER,
-        assigneeName: 'Max',
-      });
+      expect(drafts.map((d) => d.action)).toEqual(['task.updated', 'task.assigned']);
+      expect(drafts[1].metadata).toEqual({ assigneeId: USER, assigneeName: 'Max' });
     });
 
-    it("task.updated records an unassignment using the previous assignee's name", () => {
+    it('task.updated records an unassignment using the previous assignee\'s name', () => {
       const drafts = describe_(
         'task.updated',
         ctx({
@@ -141,11 +119,7 @@ describe('ACTIVITY_SPECS', () => {
     it('task.updated records nothing for an assignment that did not change', () => {
       const same = describe_(
         'task.updated',
-        ctx({
-          body: { assigneeId: USER },
-          response: { title: 'T' },
-          before: { assigneeId: USER },
-        }),
+        ctx({ body: { assigneeId: USER }, response: { title: 'T' }, before: { assigneeId: USER } }),
       );
       expect(same).toEqual([]);
     });
@@ -156,12 +130,7 @@ describe('ACTIVITY_SPECS', () => {
         ctx({
           body: { columnId: 'col-done', position: 0 },
           response: { title: 'Fix login' },
-          before: {
-            title: 'Fix login',
-            columnId: 'col-todo',
-            columnName: 'To Do',
-            toColumnName: 'Done',
-          },
+          before: { title: 'Fix login', columnId: 'col-todo', columnName: 'To Do', toColumnName: 'Done' },
         }),
       );
       expect(draft).toMatchObject({
@@ -176,37 +145,21 @@ describe('ACTIVITY_SPECS', () => {
         'task.moved',
         ctx({
           body: { columnId: 'col-todo', position: 2 },
-          before: {
-            columnId: 'col-todo',
-            columnName: 'To Do',
-            toColumnName: 'To Do',
-          },
+          before: { columnId: 'col-todo', columnName: 'To Do', toColumnName: 'To Do' },
         }),
       );
       expect(drafts).toEqual([]);
     });
 
     it('task.deleted keeps the title from the BEFORE snapshot (it is gone afterwards)', () => {
-      const [draft] = describe_(
-        'task.deleted',
-        ctx({ before: { title: 'Fix login' } }),
-      );
-      expect(draft).toMatchObject({
-        targetId: TASK,
-        targetName: 'Fix login',
-        taskId: TASK,
-      });
+      const [draft] = describe_('task.deleted', ctx({ before: { title: 'Fix login' } }));
+      expect(draft).toMatchObject({ targetId: TASK, targetName: 'Fix login', taskId: TASK });
     });
 
     it('task.labels_changed lists the new label names', () => {
       const [draft] = describe_(
         'task.labels_changed',
-        ctx({
-          response: {
-            title: 'T',
-            labels: [{ name: 'bug' }, { name: 'ui' }, {}],
-          },
-        }),
+        ctx({ response: { title: 'T', labels: [{ name: 'bug' }, { name: 'ui' }, {}] } }),
       );
       expect(draft.metadata).toEqual({ labels: ['bug', 'ui'] });
     });
@@ -216,10 +169,7 @@ describe('ACTIVITY_SPECS', () => {
     it('organization.member_role_changed records from and to, from the snapshot', () => {
       const [draft] = describe_(
         'organization.member_role_changed',
-        ctx({
-          body: { role: 'MANAGER' },
-          before: { role: 'MEMBER', name: 'Max' },
-        }),
+        ctx({ body: { role: 'MANAGER' }, before: { role: 'MEMBER', name: 'Max' } }),
       );
       expect(draft).toMatchObject({
         organizationId: ORG,
@@ -233,14 +183,11 @@ describe('ACTIVITY_SPECS', () => {
 
     it('a "role change" to the same role is not an event', () => {
       expect(
-        describe_(
-          'project.member_role_changed',
-          ctx({ body: { role: 'LEAD' }, before: { role: 'LEAD' } }),
-        ),
+        describe_('project.member_role_changed', ctx({ body: { role: 'LEAD' }, before: { role: 'LEAD' } })),
       ).toEqual([]);
     });
 
-    it("project.member_removed keeps the removed person's name and role", () => {
+    it('project.member_removed keeps the removed person\'s name and role', () => {
       const [draft] = describe_(
         'project.member_removed',
         ctx({ before: { role: 'MEMBER', name: 'Max' } }),
@@ -257,11 +204,7 @@ describe('ACTIVITY_SPECS', () => {
         'organization.member_added',
         ctx({ response: { role: 'MEMBER', user: { id: USER, name: 'Max' } } }),
       );
-      expect(draft).toMatchObject({
-        targetId: USER,
-        targetName: 'Max',
-        metadata: { role: 'MEMBER' },
-      });
+      expect(draft).toMatchObject({ targetId: USER, targetName: 'Max', metadata: { role: 'MEMBER' } });
     });
   });
 
@@ -271,11 +214,7 @@ describe('ACTIVITY_SPECS', () => {
         'organization.created',
         ctx({ params: {}, response: { id: ORG, name: 'Acme' } }),
       );
-      expect(draft).toMatchObject({
-        organizationId: ORG,
-        targetId: ORG,
-        targetName: 'Acme',
-      });
+      expect(draft).toMatchObject({ organizationId: ORG, targetId: ORG, targetName: 'Acme' });
     });
 
     it('project.created uses the new project id as its own projectId', () => {
@@ -283,45 +222,28 @@ describe('ACTIVITY_SPECS', () => {
         'project.created',
         ctx({ params: { id: ORG }, response: { id: PROJECT, name: 'Apollo' } }),
       );
-      expect(draft).toMatchObject({
-        organizationId: ORG,
-        projectId: PROJECT,
-        targetName: 'Apollo',
-      });
+      expect(draft).toMatchObject({ organizationId: ORG, projectId: PROJECT, targetName: 'Apollo' });
     });
 
     it('project.deleted keeps the name from the snapshot', () => {
-      const [draft] = describe_(
-        'project.deleted',
-        ctx({ before: { name: 'Apollo' } }),
-      );
+      const [draft] = describe_('project.deleted', ctx({ before: { name: 'Apollo' } }));
       expect(draft).toMatchObject({ projectId: PROJECT, targetName: 'Apollo' });
     });
   });
 
   describe('comments and attachments', () => {
-    it("are attached to their task's timeline and named after the task", () => {
+    it('are attached to their task\'s timeline and named after the task', () => {
       const [comment] = describe_(
         'comment.created',
         ctx({ response: { id: USER }, before: { title: 'Fix login' } }),
       );
-      expect(comment).toMatchObject({
-        taskId: TASK,
-        targetType: 'comment',
-        targetName: 'Fix login',
-      });
+      expect(comment).toMatchObject({ taskId: TASK, targetType: 'comment', targetName: 'Fix login' });
 
       const [file] = describe_(
         'attachment.added',
-        ctx({
-          response: { id: USER, fileName: 'shot.png' },
-          before: { title: 'Fix login' },
-        }),
+        ctx({ response: { id: USER, fileName: 'shot.png' }, before: { title: 'Fix login' } }),
       );
-      expect(file).toMatchObject({
-        taskId: TASK,
-        metadata: { fileName: 'shot.png' },
-      });
+      expect(file).toMatchObject({ taskId: TASK, metadata: { fileName: 'shot.png' } });
     });
   });
 });

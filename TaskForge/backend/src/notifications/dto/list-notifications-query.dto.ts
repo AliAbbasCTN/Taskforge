@@ -1,3 +1,4 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import { IsBoolean, IsInt, IsOptional, Max, Min } from 'class-validator';
 import {
@@ -15,12 +16,14 @@ export class ListNotificationsQueryDto {
   @IsOptional()
   @Transform(toOptionalBoolean)
   @IsBoolean()
+  @ApiPropertyOptional({ type: Boolean, description: 'true: only unread notifications.' })
   unread?: boolean;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @ApiPropertyOptional({ minimum: 1, default: 1, description: 'Page number, starting at 1.' })
   page: number = 1;
 
   @IsOptional()
@@ -28,5 +31,11 @@ export class ListNotificationsQueryDto {
   @IsInt()
   @Min(1)
   @Max(MAX_PAGE_SIZE)
+  @ApiPropertyOptional({
+    minimum: 1,
+    maximum: MAX_PAGE_SIZE,
+    default: DEFAULT_PAGE_SIZE,
+    description: 'Items per page.',
+  })
   pageSize: number = DEFAULT_PAGE_SIZE;
 }

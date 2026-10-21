@@ -9,11 +9,7 @@ import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/database/prisma.service';
 import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
 import { createAppValidationPipe } from '../src/common/pipes/app-validation.pipe';
-import {
-  eventually,
-  maintenanceQueue,
-  settleNotifications,
-} from './helpers/queues';
+import { eventually, maintenanceQueue, settleNotifications } from './helpers/queues';
 
 /**
  * FILE UPLOAD end-to-end tests. They use the LOCAL storage driver pointed at a
@@ -101,11 +97,7 @@ describe('Attachments (e2e)', () => {
       .post('/auth/register')
       .send({ email, name, password: 'password1' })
       .expect(201);
-    return {
-      id: res.body.user.id as string,
-      email,
-      token: res.body.tokens.accessToken as string,
-    };
+    return { id: res.body.user.id as string, email, token: res.body.tokens.accessToken as string };
   }
 
   /**
@@ -117,11 +109,7 @@ describe('Attachments (e2e)', () => {
     const member = await register('member@example.com', 'Max Member');
     const outsider = await register('outsider@example.com', 'Olga Outsider');
     const orgId = (
-      await api()
-        .post('/organizations')
-        .set('Authorization', bearer(lead.token))
-        .send({ name: 'Org' })
-        .expect(201)
+      await api().post('/organizations').set('Authorization', bearer(lead.token)).send({ name: 'Org' }).expect(201)
     ).body.id as string;
     await api()
       .post(`/organizations/${orgId}/members`)
@@ -159,16 +147,10 @@ describe('Attachments (e2e)', () => {
     const taskId = await createTask('Fix login');
     await settleNotifications(app);
 
-    const attachmentsPath = (task = taskId) =>
-      `${boardPath}/tasks/${task}/attachments`;
+    const attachmentsPath = (task = taskId) => `${boardPath}/tasks/${task}/attachments`;
     const upload = (
       token: string,
-      opts: {
-        buffer?: Buffer;
-        filename?: string;
-        contentType?: string;
-        task?: string;
-      } = {},
+      opts: { buffer?: Buffer; filename?: string; contentType?: string; task?: string } = {},
     ) =>
       api()
         .post(attachmentsPath(opts.task))
@@ -178,18 +160,7 @@ describe('Attachments (e2e)', () => {
           contentType: opts.contentType ?? 'image/png',
         });
 
-    return {
-      lead,
-      member,
-      outsider,
-      orgId,
-      projectId,
-      boardId: board.id as string,
-      taskId,
-      createTask,
-      attachmentsPath,
-      upload,
-    };
+    return { lead, member, outsider, orgId, projectId, boardId: board.id as string, taskId, createTask, attachmentsPath, upload };
   }
 
   const filesOnDisk = (key: string) => existsSync(join(storageDir, key));
@@ -207,10 +178,7 @@ describe('Attachments (e2e)', () => {
         mimeType: 'image/png',
         sizeBytes: PNG.length,
         createdAt: expect.any(String),
-        uploader: expect.objectContaining({
-          id: w.member.id,
-          name: 'Max Member',
-        }),
+        uploader: expect.objectContaining({ id: w.member.id, name: 'Max Member' }),
       });
       expect(JSON.stringify(created.body)).not.toContain('storageKey');
       expect(JSON.stringify(created.body)).not.toContain('attachments/');
@@ -241,9 +209,7 @@ describe('Attachments (e2e)', () => {
     it('ignores the client-claimed Content-Type: the stored type comes from the content', async () => {
       const w = await world();
 
-      const res = await w
-        .upload(w.member.token, { contentType: 'text/html' })
-        .expect(201);
+      const res = await w.upload(w.member.token, { contentType: 'text/html' }).expect(201);
 
       expect(res.body.mimeType).toBe('image/png');
     });
@@ -256,12 +222,8 @@ describe('Attachments (e2e)', () => {
         .expect(201);
 
       expect(res.body.fileName).toBe('escape.png');
-      const row = await prisma.attachment.findUniqueOrThrow({
-        where: { id: res.body.id },
-      });
-      expect(row.storageKey).toMatch(
-        /^attachments\/[0-9a-f-]{36}\/[0-9a-f-]{36}\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.png$/,
-      );
+      const row = await prisma.attachment.findUniqueOrThrow({ where: { id: res.body.id } });
+      expect(row.storageKey).toMatch(/^attachments\/[0-9a-f-]{36}\/[0-9a-f-]{36}\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.png$/);
       expect(filesOnDisk(row.storageKey)).toBe(true);
     });
   });
@@ -283,10 +245,7 @@ describe('Attachments (e2e)', () => {
     it('415 for a file that is not what its extension claims (a renamed HTML file)', async () => {
       const w = await world();
       await w
-        .upload(w.member.token, {
-          buffer: Buffer.from('<script>alert(1)</script>'),
-          filename: 'holiday.png',
-        })
+        .upload(w.member.token, { buffer: Buffer.from('<script>alert(1)</script>'), filename: 'holiday.png' })
         .expect(415);
       expect(await prisma.attachment.count()).toBe(0);
     });
@@ -324,10 +283,7 @@ describe('Attachments (e2e)', () => {
       const w = await world();
       const created = await w.upload(w.member.token).expect(201);
 
-      await api()
-        .get(w.attachmentsPath())
-        .set('Authorization', bearer(w.outsider.token))
-        .expect(404);
+      await api().get(w.attachmentsPath()).set('Authorization', bearer(w.outsider.token)).expect(404);
       await w.upload(w.outsider.token).expect(404);
       await api()
         .get(`${w.attachmentsPath()}/${created.body.id}/download`)
@@ -364,9 +320,7 @@ describe('Attachments (e2e)', () => {
     it('lets the uploader delete their file; the row and the stored bytes are both gone', async () => {
       const w = await world();
       const created = await w.upload(w.member.token).expect(201);
-      const row = await prisma.attachment.findUniqueOrThrow({
-        where: { id: created.body.id },
-      });
+      const row = await prisma.attachment.findUniqueOrThrow({ where: { id: created.body.id } });
       expect(filesOnDisk(row.storageKey)).toBe(true);
 
       await api()
@@ -378,7 +332,7 @@ describe('Attachments (e2e)', () => {
       expect(filesOnDisk(row.storageKey)).toBe(false);
     });
 
-    it("403 when a plain member deletes someone else's file; a project lead may", async () => {
+    it('403 when a plain member deletes someone else\'s file; a project lead may', async () => {
       const w = await world();
       const leadUpload = await w.upload(w.lead.token).expect(201);
 
@@ -401,26 +355,16 @@ describe('Attachments (e2e)', () => {
       const w = await world();
       const keptTask = await w.createTask('Keep me');
       const orphaned = await w.upload(w.member.token).expect(201);
-      const kept = await w
-        .upload(w.member.token, { task: keptTask })
-        .expect(201);
-      const orphanedRow = await prisma.attachment.findUniqueOrThrow({
-        where: { id: orphaned.body.id },
-      });
-      const keptRow = await prisma.attachment.findUniqueOrThrow({
-        where: { id: kept.body.id },
-      });
+      const kept = await w.upload(w.member.token, { task: keptTask }).expect(201);
+      const orphanedRow = await prisma.attachment.findUniqueOrThrow({ where: { id: orphaned.body.id } });
+      const keptRow = await prisma.attachment.findUniqueOrThrow({ where: { id: kept.body.id } });
 
       // Deleting the task cascades to the attachment ROW only - the file stays.
       await api()
-        .delete(
-          `/organizations/${w.orgId}/projects/${w.projectId}/boards/${w.boardId}/tasks/${w.taskId}`,
-        )
+        .delete(`/organizations/${w.orgId}/projects/${w.projectId}/boards/${w.boardId}/tasks/${w.taskId}`)
         .set('Authorization', bearer(w.lead.token))
         .expect(204);
-      expect(
-        await prisma.attachment.count({ where: { id: orphaned.body.id } }),
-      ).toBe(0);
+      expect(await prisma.attachment.count({ where: { id: orphaned.body.id } })).toBe(0);
       expect(filesOnDisk(orphanedRow.storageKey)).toBe(true);
 
       // Make both files "old" (past the 24h grace period), then run the sweep.
@@ -438,9 +382,7 @@ describe('Attachments (e2e)', () => {
     it('does not touch a fresh orphan: it may be an upload still in progress', async () => {
       const w = await world();
       const created = await w.upload(w.member.token).expect(201);
-      const row = await prisma.attachment.findUniqueOrThrow({
-        where: { id: created.body.id },
-      });
+      const row = await prisma.attachment.findUniqueOrThrow({ where: { id: created.body.id } });
       await prisma.attachment.delete({ where: { id: row.id } }); // simulate a missing row
 
       await maintenanceQueue(app).add('sweep-orphaned-files', {});

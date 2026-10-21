@@ -1,3 +1,4 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
   IsNotEmpty,
@@ -15,6 +16,7 @@ export class UpdateLabelDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(50)
+  @ApiPropertyOptional({ example: 'Defect', maxLength: 50 })
   name?: string;
 
   @IsOptional()
@@ -22,5 +24,6 @@ export class UpdateLabelDto {
   @Matches(/^#[0-9a-fA-F]{6}$/, {
     message: 'color must be a hex colour like #2f4bdb',
   })
+  @ApiPropertyOptional({ example: '#2f4bdb', pattern: '^#[0-9a-fA-F]{6}$', description: 'Hex colour, #RRGGBB.' })
   color?: string;
 }

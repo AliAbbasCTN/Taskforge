@@ -31,7 +31,5 @@ export function canActOnProject(
   ) {
     return true;
   }
-  return projectRole
-    ? projectRoleHasPermission(projectRole, permission)
-    : false;
+  return projectRole ? projectRoleHasPermission(projectRole, permission) : false;
 }
